@@ -18,7 +18,7 @@ preprocess:
     default: 10
   num_frames: # when 'mode' is 'fixed_num_frames', 'num_frames' is the number of frames to extract from each video.
     type: int
-    default: 10 #32
+    default: 390 #10 #32
 
 # rearrange:
 #   dataset_name: # the name of dataset
