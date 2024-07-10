@@ -234,6 +234,10 @@ def video_manipulate(
     # Define face detector and predictor models
     face_detector = dlib.get_frontal_face_detector()
     predictor_path = './dlib_tools/shape_predictor_81_face_landmarks.dat'
+    # https://github.com/codeniko/shape_predictor_81_face_landmarks -> is taken from here? doesn't seem to be an official dlib model
+    
+    # predictor_path = './dlib_tools/shape_predictor_68_face_landmarks.dat'
+
     ## Check if predictor path exists
     if not os.path.exists(predictor_path):
         logger.error(f"Predictor path does not exist: {predictor_path}")
@@ -353,7 +357,8 @@ def video_manipulate(
 
 def preprocess(dataset_path, mask_path, mode, num_frames, stride, logger):
     # Define paths to videos in dataset
-    movies_path_list = sorted([Path(p) for p in glob.glob(os.path.join(dataset_path, '**/*.mp4'), recursive=True)])
+    # movies_path_list = sorted([Path(p) for p in glob.glob(os.path.join(dataset_path, '**/*.mp4'), recursive=True)])
+    movies_path_list = sorted([Path(p) for p in glob.glob(os.path.join(dataset_path, '*.avi'), recursive=True)])
     if len(movies_path_list) == 0:
         logger.error(f"No videos found in {dataset_path}")
         sys.exit()
@@ -413,7 +418,8 @@ def preprocess(dataset_path, mask_path, mode, num_frames, stride, logger):
 
 if __name__ == '__main__':
     # from config.yaml load parameters
-    yaml_path = './config.yaml'
+    # yaml_path = './config.yaml'
+    yaml_path = './test_preproc.yaml'
     # open the yaml file
     try:
         with open(yaml_path, 'r') as f:
@@ -430,7 +436,7 @@ if __name__ == '__main__':
     num_frames = config['preprocess']['num_frames']['default']
     
     # use dataset_name and dataset_root_path to get dataset_path
-    dataset_path = Path(os.path.join(dataset_root_path, dataset_name))
+    dataset_path = Path(os.path.join(dataset_root_path, dataset_name)) # dataset_path = join(MyDat)
 
     # Create logger
     log_path = f'./logs/{dataset_name}.log'
@@ -485,6 +491,13 @@ if __name__ == '__main__':
     ## UADFV
     elif dataset_name == 'UADFV':
         sub_dataset_names = ['fake', 'real']
+        sub_dataset_paths = [Path(os.path.join(dataset_path, name)) for name in sub_dataset_names]
+
+
+    # MyDataset
+    elif dataset_name == 'MyDataset':
+        sub_dataset_names = ['hand_occ', 'obj_occ']
+        # sub_dataset_names -> user_ids
         sub_dataset_paths = [Path(os.path.join(dataset_path, name)) for name in sub_dataset_names]
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized")
