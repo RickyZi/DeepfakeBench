@@ -53,6 +53,37 @@ After running this code, it will generates a json file looks like the below stru
 }
 """
 
+"""
+my version of the dataset 
+user_faces_no_occlusion - testing
+{ 
+    "user_300299": {
+        "facedancer_faces": {
+            "hand_occ_1": {
+                "label": "fake",
+                "frames": [ 
+                    "/path/to/frames/video1/frame1.png",
+                    "/path/to/frames/video1/frame2.png",
+                    ...
+                ]
+            },
+            "hand_occ_2": {
+                "label": "fake",
+                "frames": [ 
+                    "/path/to/frames/video1/frame1.png",
+                    "/path/to/frames/video1/frame2.png",
+                    ...
+                ]
+            },
+            ...
+        
+}
+
+same structure for training, but with more users
+
+"""
+
+
 
 import os
 import glob
@@ -98,7 +129,7 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
         
         # Load the JSON files for data split
         with open(file=os.path.join(os.path.join(dataset_root_path, 'FaceForensics++', 'train.json')), mode='r') as f:
-            train_json = json.load(f)
+            train_json = json.load(f) 
         with open(file=os.path.join(os.path.join(dataset_root_path, 'FaceForensics++', 'val.json')), mode='r') as f:
             val_json = json.load(f)
         with open(file=os.path.join(os.path.join(dataset_root_path, 'FaceForensics++', 'test.json')), mode='r') as f:
@@ -376,10 +407,12 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
             if not os.path.isdir(folder):
                 continue
             if folder.name in ['test']:
-                # 读取csv文件
+                # 读取csv文件 
+                # Read the csv file
                 df = pd.read_csv(os.path.join(dataset_path,folder.name,'labels.csv'))
                 labels = ['DFDC_Real','DFDC_Fake']
                 # 循环遍历每一行，并逐行读取filename和label的值
+                # Loop through each line and read the values ​​of filename and label line by line
                 for index, row in df.iterrows():
                     vidname = row['filename'].split('.mp4')[0]
                     label = labels[row['label']]
@@ -412,58 +445,95 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
                             dataset_dict[dataset_name][label]['train'][video_name] = {'label': label, 'frames': frame_paths}
                             dataset_dict[dataset_name][label]['val'][video_name] = {'label': label, 'frames': frame_paths}
 
-    ## DeeperForensics-1.0 dataset
-    elif dataset_name == 'DeeperForensics-1.0':
-        with open(os.path.join(dataset_root_path, dataset_name, 'lists/splits/train.txt'), 'r') as f:
-            train_txt = f.readlines()
-            train_txt = [line.strip().split('.')[0] for line in train_txt]
-        with open(os.path.join(dataset_root_path, dataset_name, 'lists/splits/test.txt'), 'r') as f:
-            test_txt = f.readlines()
-            test_txt = [line.strip().split('.')[0] for line in test_txt]
-        with open(os.path.join(dataset_root_path, dataset_name, 'lists/splits/val.txt'), 'r') as f:
-            val_txt = f.readlines()
-            val_txt = [line.strip().split('.')[0] for line in val_txt]
+    # ------------------------------------------------------- #
+    # ------------------- Test My Dataset ------------------- #
+    # ------------------------------------------------------- #
+
+    elif  dataset_name == 'occlusion' or dataset_name == 'no_occlusion': # dataset_name == 'user_faces_no_occlusion' or
         dataset_path = os.path.join(dataset_root_path, dataset_name)
-        dataset_dict[dataset_name] = {'DF_real': {'train': {}, 'test': {}, 'val': {}},
-                                'DF_fake': {'train': {}, 'test': {}, 'val': {}}}
-        if not Path(os.path.join(dataset_path, 'manipulated_videos', perturbation)).exists():
-            raise ValueError(f"wrong in processing perturbation {perturbation} in manipulated_videos")
-        print(f"processing perturbation {perturbation} in manipulated_videos")
-        for video_path in os.scandir(os.path.join(dataset_path, 'manipulated_videos', perturbation, 'frames')):
-            if video_path.is_dir():
-                video_name = video_path.name
-                if video_name in train_txt:
-                    set_attr = 'train'
-                elif video_name in test_txt:
-                    set_attr = 'test'
-                elif video_name in val_txt:
-                    set_attr = 'val'
+        print("dataset path", dataset_path)
+        # breakpoint()
+        dataset_dict[dataset_name] = {'real': {},
+                                'fake': {}}
+
+        for root, dirs, files in os.walk(dataset_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                print("file_path: ", file_path)
+                file_path = str(file_path).replace('\\', '/')
+                parts = file_path.split('/')
+                data_split = parts[-5] # trn, tst split
+                user_id = parts[-4]
+                algorithm = parts[-3]
+                challenge = parts[-2]
+
+                vid_name = user_id + '_' + algorithm + '_' + challenge
+                
+                # print("data_split: ", data_split)
+                # print("user_id: ", user_id)
+                # print("algorithm: ", algorithm)
+                # print("challenge: ", challenge)
+                # print("vid_name: ", vid_name)
+                # # breakpoint()
+
+                if 'original' in file_path:
+                    label = 'real'
                 else:
-                    raise ValueError(f"wrong in processing vidname {dataset_name}: {line}")
-                label = 'DF_fake'
-                frame_paths = [os.path.join(video_path, frame.name) for frame in os.scandir(video_path)]
-                ## if frame image in frame_paths is not the correct png, skip this frame yxh
-                for frame_path in frame_paths:
-                    if cv2.imread(frame_path) is None:
-                        frame_paths.remove(frame_path)
-                dataset_dict[dataset_name][label][set_attr][video_name] = {'label': label, 'frames': frame_paths}
-        for actor_path in os.scandir(os.path.join(dataset_path, 'source_videos')):
-            print("actor",actor_path.name)
-            if not os.path.isdir(actor_path):
-                continue
-            label = 'DF_real'
-            video_paths = [os.path.join(actor_path, 'frames', video.name) for video in os.scandir(os.path.join(actor_path, 'frames'))]
-            for video_path in video_paths:
-                video_name = video_path.split('/')[-1]
-                frame_paths = [os.path.join(video_path, frame.name) for frame in os.scandir(video_path)]
-                ## if frame image in frame_paths is not the correct png, skip this frame yxh
-                for frame_path in frame_paths:
-                    if cv2.imread(frame_path) is None:
-                        frame_paths.remove(frame_path)
-                dataset_dict[dataset_name][label]['train'][video_name] = {'label': label, 'frames': frame_paths}
-                dataset_dict[dataset_name][label]['test'][video_name] = {'label': label, 'frames': frame_paths}
-                dataset_dict[dataset_name][label]['val'][video_name] = {'label': label, 'frames': frame_paths}
-        
+                    label = 'fake'
+                # print("label: ", label)
+                if label not in dataset_dict[dataset_name]:
+                    # print("label: ", label)
+                    dataset_dict[dataset_name][label] = {}
+                    # ie. dataset_dict['user_faces_no_occlusion']['real_faces'] = {'train': {}, 'test': {}}
+                
+
+                if data_split == 'training':
+                    data_split = 'train'
+                else:
+                    data_split = 'test'
+
+                if data_split not in dataset_dict[dataset_name][label]:
+                    dataset_dict[dataset_name][label][data_split] = {}
+
+                if vid_name not in dataset_dict[dataset_name][label][data_split]:
+                    dataset_dict[dataset_name][label][data_split][vid_name] = {
+                        'label': 'real' if 'original' in algorithm else 'fake',
+                        'frames': []
+                    }
+
+                dataset_dict[dataset_name][label][data_split][vid_name]['frames'].append(file_path)
+
+                # # if data_split == 'training':
+                # #         data_split = 'train'
+                # # else: 
+                # #         data_split = 'test'
+                # # if data_split not in dataset_dict[dataset_name][label]:
+                # #     # print("data_split: ", data_split)
+                # #     dataset_dict[dataset_name][label][data_split] = {}
+                
+                # if user_id not in dataset_dict[dataset_name][label]:
+                #     dataset_dict[dataset_name][label][user_id] = {}
+
+                # if algorithm not in dataset_dict[dataset_name][label][user_id]:
+                #     # print("algorithm: ", algorithm)
+                #     dataset_dict[dataset_name][label][user_id][algorithm] = {}
+
+                # if challenge not in dataset_dict[dataset_name][label][user_id][algorithm]:
+                #     dataset_dict[dataset_name][label][user_id][algorithm][challenge] = {
+                #         'label': 'real' if 'original' in algorithm else 'fake',
+                #         'frames': []
+                #     }
+                # # print("label: ", label)
+                # print("user_id: ", user_id)
+                # print("algorithm: ", algorithm)
+                # print("challenge: ", challenge)
+                # print("label: ", dataset_dict[dataset_name][label][user_id][algorithm][challenge]['label'])
+                # dataset_dict[dataset_name][label][user_id][algorithm][challenge]['frames'].append(file_path)  
+                
+                # breakpoint()
+
+                
+    # ------------------------------------------------------- #    
     ## UADFV dataset
     elif dataset_name == 'UADFV':
         dataset_path = os.path.join(dataset_root_path, dataset_name)
@@ -493,8 +563,13 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
 
     # Convert the dataset dictionary to JSON format and save to file
     output_file_path = os.path.join(output_file_path, dataset_name + '.json')
-    with open(output_file_path, 'w') as f:
-        json.dump(dataset_dict, f)
+
+    if dataset_name == 'occlusion' or dataset_name == 'no_occlusion':
+        with open(output_file_path, 'w') as f:
+            json.dump(dataset_dict, f, indent=4)
+    else: 
+        with open(output_file_path, 'w') as f:
+            json.dump(dataset_dict, f)
     # print the successfully generated dataset dictionary
     print(f"{dataset_name}.json generated successfully.")
 
