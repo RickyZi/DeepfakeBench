@@ -531,6 +531,102 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
                 # dataset_dict[dataset_name][label][user_id][algorithm][challenge]['frames'].append(file_path)  
                 
                 # breakpoint()
+    # --------------------------------------------------- #
+    # ------------------- Test GOTCHA ------------------- #
+    # --------------------------------------------------- #
+    elif dataset_name == 'gotcha_occlusion' or dataset_name == 'gotcha_no_occlusion':
+        # reorganize the GOTCHA dataset
+        dataset_path = os.path.join(dataset_root_path, dataset_name)
+        dataset_dict[dataset_name] = {'gotcha_real': {},
+                                'gotcha_fake': {}}
+        
+        # GOTCHA structure: 
+        # original - hand_occ / obj_occ
+        # user_id -> hand / no_hand -> frames
+
+        # fake - hand_occ / obj_occ
+        # user_id -> challenge_id (2 or 5) -> swap_id -> hand / no_hand -> frames
+
+        for root, dirs, files in os.walk(dataset_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_path = str(file_path).replace('\\', '/')
+                parts = file_path.split('/')
+                
+
+                if 'original' in file_path:
+                    label = 'gotcha_real'
+                    # ex. gotcha/no_occlusion/testing/46/original/hand_occlusion/
+                # else:
+                #     label = 'gotcha_fake'
+                    # ex. gotcha/no_occlusion/testing/46/DFL/hand_occlusion/35/
+
+                    if label not in dataset_dict[dataset_name]:
+                        dataset_dict[dataset_name][label] = {}
+
+                # depending on the label, the structure of the dataset is different
+                # if label == 'gotcha_real':
+                    # ex. gotcha/no_occlusion/testing/46/original/hand_occlusion/001.jpg
+
+                    data_split = parts[-5] # testing or training
+                    if data_split == 'training': 
+                        data_split = 'train'
+                    else:
+                        data_split = 'test'
+                    user_id = parts[-4] # i.e. 46
+                    algorithm = parts[-3] # original
+                    challenge = parts[-2] # hand_occlusion or obj_occlusion
+                    
+                    vid_name = user_id + '_' + algorithm + '_' + challenge
+                    # i.e. 46_original_hand_occlusion
+
+                    if data_split not in dataset_dict[dataset_name][label]:
+                        dataset_dict[dataset_name][label][data_split] = {}
+
+                    if vid_name not in dataset_dict[dataset_name][label][data_split]:
+                        dataset_dict[dataset_name][label][data_split][vid_name] = {
+                            'label': 'real' if 'original' in algorithm else 'fake',
+                            'frames': []
+                        }
+
+                    dataset_dict[dataset_name][label][data_split][vid_name]['frames'].append(file_path)
+
+
+                else: # label = 'gotcha_fake'
+                    # ex. gotcha/no_occlusion/testing/46/DFL/hand_occlusion/35/
+                    label = 'gotcha_fake'
+                    # ex. gotcha/no_occlusion/testing/46/original/hand_occlusion/
+                # else:
+                #     label = 'gotcha_fake'
+                    # ex. gotcha/no_occlusion/testing/46/DFL/hand_occlusion/35/
+
+                    if label not in dataset_dict[dataset_name]:
+                        dataset_dict[dataset_name][label] = {}
+
+                    data_split = parts[-6] # testing or training
+                    if data_split == 'training': 
+                        data_split = 'train'
+                    else:
+                        data_split = 'test'
+
+                    user_id = parts[-5] # i.e. 46
+                    algorithm = parts[-4] # DFL
+                    challenge = parts[-3] # hand_occlusion or obj_occlusion
+                    swap_id = parts[-2] # 35
+                    
+                    vid_name = user_id + '_' + algorithm + '_' + challenge + '_' + swap_id
+                    # i.e. 46_original_hand_occlusion
+
+                    if data_split not in dataset_dict[dataset_name][label]:
+                        dataset_dict[dataset_name][label][data_split] = {}
+
+                    if vid_name not in dataset_dict[dataset_name][label][data_split]:
+                        dataset_dict[dataset_name][label][data_split][vid_name] = {
+                            'label': 'real' if 'original' in algorithm else 'fake',
+                            'frames': []
+                        }
+
+                    dataset_dict[dataset_name][label][data_split][vid_name]['frames'].append(file_path)
 
                 
     # ------------------------------------------------------- #    
@@ -564,7 +660,7 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
     # Convert the dataset dictionary to JSON format and save to file
     output_file_path = os.path.join(output_file_path, dataset_name + '.json')
 
-    if dataset_name == 'occlusion' or dataset_name == 'no_occlusion':
+    if dataset_name == 'occlusion' or dataset_name == 'no_occlusion' or dataset_name == 'gotcha_occlusion' or dataset_name == 'gotcha_no_occlusion':
         with open(output_file_path, 'w') as f:
             json.dump(dataset_dict, f, indent=4)
     else: 
