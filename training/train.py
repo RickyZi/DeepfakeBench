@@ -28,6 +28,7 @@ import torch.distributed as dist
 
 from optimizor.SAM import SAM
 from optimizor.LinearLR import LinearDecayLR
+from optimizor.focalLoss import FocalLoss
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR
@@ -37,16 +38,18 @@ from logger import create_logger, RankFilter
 
 
 parser = argparse.ArgumentParser(description='Process some paths.')
-parser.add_argument('--detector_path', type=str,
-                    default='/data/home/zhiyuanyan/DeepfakeBenchv2/training/config/detector/sbi.yaml',
-                    help='path to detector YAML file')
-parser.add_argument("--train_dataset", nargs="+")
+# parser.add_argument('--detector_path', type=str,
+                    # default='/data/home/zhiyuanyan/DeepfakeBenchv2/training/config/detector/sbi.yaml',
+                    # help='path to detector YAML file')
+parser.add_argument('--detector', type=str, default = 'xception', help='detector name')
+# parser.add_argument("--train_dataset", nargs="+")
 parser.add_argument("--test_dataset", nargs="+")
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
 parser.add_argument('--no-save_feat', dest='save_feat', action='store_false', default=True)
-parser.add_argument("--ddp", action='store_true', default=False)
-parser.add_argument('--local_rank', type=int, default=0)
-parser.add_argument('--task_target', type=str, default="", help='specify the target of current training task')
+parser.add_argument("--ddp", action='store_true', default=False) # whether to use distributed data parallel
+parser.add_argument('--local_rank', type=int, default=0) # local rank for distributed data parallel
+parser.add_argument('--task_target', type=str, default="", help='specify the target of current training task') 
+parser.add_argument('--tags', type=str, default="", help='specify the tags of current training task')
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
@@ -182,6 +185,21 @@ def choose_optimizer(model, config):
             lr=config['optimizer'][opt_name]['lr'],
             momentum=config['optimizer'][opt_name]['momentum'],
         )
+
+    # ---------------------------------------- #
+    # -------------- Focal Loss -------------- #
+    # ---------------------------------------- #
+    # check if definition ok!!!
+
+    elif opt_name == 'focal_loss':
+        optimizer = FocalLoss(
+            alpha=config['optimizer'][opt_name]['alpha'], # default: 0.25
+            gamma=config['optimizer'][opt_name]['gamma'], # default: 2
+            reduction=config['optimizer'][opt_name]['reduction'], # default: mean
+        )
+        
+    # criterion = FocalLoss(alpha=0.25, gamma=2) 
+    
     else:
         raise NotImplementedError('Optimizer {} is not implemented'.format(config['optimizer']))
     return optimizer
@@ -216,14 +234,14 @@ def choose_scheduler(config, optimizer):
 
 def choose_metric(config):
     metric_scoring = config['metric_scoring']
-    if metric_scoring not in ['eer', 'auc', 'acc', 'ap']:
+    if metric_scoring not in ['eer','auc', 'acc', 'ap']:  
         raise NotImplementedError('metric {} is not implemented'.format(metric_scoring))
     return metric_scoring
 
 
 def main():
     # parse options and load config
-    with open(args.detector_path, 'r') as f:
+    with open(args.detector, 'r') as f:
         config = yaml.safe_load(f)
     with open('./training/config/train_config.yaml', 'r') as f:
         config2 = yaml.safe_load(f)
@@ -231,7 +249,7 @@ def main():
         config2['label_dict']=config['label_dict']
     config.update(config2)
     config['local_rank']=args.local_rank
-    if config['dry_run']:
+    if config['dry_run']: 
         config['nEpochs'] = 0
         config['save_feat']=False
     # If arguments are provided, they will overwrite the yaml settings

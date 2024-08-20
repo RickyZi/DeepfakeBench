@@ -58,6 +58,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         # Set the configuration and mode
         self.config = config
         self.mode = mode
+        print("self.mode", mode)
         self.compression = config['compression']
         self.frame_num = config['frame_num'][mode]
 
@@ -65,6 +66,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.video_level = config.get('video_mode', False)
         self.clip_size = config.get('clip_size', None)
         self.lmdb = config.get('lmdb', False)
+        # print("self.lmdb", self.lmdb)
+        # breakpoint()
         # Dataset dictionary
         self.image_list = []
         self.label_list = []
@@ -188,6 +191,10 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             cp = 'c40'
         # Get the information for the current dataset
         for label in dataset_info[dataset_name]:
+            # print("label", label)
+            
+            # print(dataset_info[dataset_name][label][self.mode])
+
             sub_dataset_info = dataset_info[dataset_name][label][self.mode]
             # Special case for FaceForensics++ and DeepFakeDetection, choose the compression type
             if cp == None and dataset_name in ['FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT', 'FaceForensics++','DeepFakeDetection','FaceShifter']:
@@ -209,7 +216,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 if '\\' in frame_paths[0]:
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('\\')[-1].split('.')[0]))
                 else:
-                    frame_paths = sorted(frame_paths, key=lambda x: int(x.split('/')[-1].split('.')[0]))
+                    # frame_paths = sorted(frame_paths, key=lambda x: int(x.split('/')[-1].split('.')[0]))
+                    frame_paths = sorted(frame_paths, key=lambda x: int(''.join(filter(str.isdigit, x.split('/')[-1].split('.')[0]))))
 
                 # Consider the case when the actual number of frames (e.g., 270) is larger than the specified (i.e., self.frame_num=32)
                 # In this case, we select self.frame_num frames from the original 270 frames
@@ -271,7 +279,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     frame_path_list.extend(frame_paths)
                     # video name save
                     video_name_list.extend([unique_video_name] * len(frame_paths))
-            
+        
+
+        # if self.mode == 'train':
         # Shuffle the label and frame path lists in the same order
         shuffled = list(zip(label_list, frame_path_list, video_name_list))
         random.shuffle(shuffled)
@@ -295,10 +305,20 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         """
         size = self.config['resolution'] # if self.mode == "train" else self.config['resolution']
         if not self.lmdb:
-            if not file_path[0] == '.':
-                file_path =  f'./{self.config["rgb_dir"]}\\'+file_path
-            assert os.path.exists(file_path), f"{file_path} does not exist"
-            img = cv2.imread(file_path)
+            # print("file_path:", file_path)
+            # print("file_path[0]:", file_path[0])
+
+            # ------------------------------------------------------------------------------- #
+            # occlusion and no_occlusion dataset already have the path for loading the images
+            if self.config['test_dataset'] == 'occlusion' or  self.config['test_dataset'] == 'no_occlusion':
+                img = cv2.imread(file_path)
+            else:
+                # check rgb_dir path
+                if not file_path[0] == '.':
+                    file_path =  f'./{self.config["rgb_dir"]}\\'+file_path
+                assert os.path.exists(file_path), f"{file_path} does not exist"
+                img = cv2.imread(file_path)
+                
             if img is None:
                 raise ValueError('Loaded image is None: {}'.format(file_path))
         elif self.lmdb:

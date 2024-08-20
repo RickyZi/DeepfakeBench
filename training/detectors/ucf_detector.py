@@ -260,7 +260,14 @@ class UCFDetector(AbstractDetector):
             self.correct += correct
             self.total += data_dict['label'].size(0)
 
-            pred_dict = {'cls': out_sha, 'feat': sha_feat}
+            # pred_dict = {'cls': out_sha, 'feat': sha_feat}
+            # -------------------------------------------------- #
+            # I get keyerror: 'prob' when I run the test of the ucf model, and when I check the ucf_detector.py code, 
+            # I find that pred_dict = {'cls': out_sha, 'feat': sha_feat} is missing prob, change to 
+            # pred_dict = {'cls': out_sha, 'prob': prob_sha, 'feat': sha_feat} After the code runs successfully.
+            # https://github.com/SCLBD/DeepfakeBench/issues/96
+
+            pred_dict = {'cls': out_sha, 'prob': prob_sha, 'feat': sha_feat}
             return  pred_dict
 
         bs = f_share.size(0)

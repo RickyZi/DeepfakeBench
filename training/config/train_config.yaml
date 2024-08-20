@@ -41,3 +41,11 @@ label_dict:
   # Roop
   roop_Real: 0
   roop_Fake: 1
+
+  # TODO: add my dataset labels here!!!!
+  # real: 0
+  # fake: 1
+
+  # gotcha dataset
+  # gotcha_real: 0
+  # gotcha_fake: 1

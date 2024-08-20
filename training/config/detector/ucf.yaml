@@ -1,8 +1,8 @@
 # log dir 
-log_dir: /data/home/zhiyuanyan/DeepfakeBench/debug_logs/ucf
+log_dir: /home/rz/DeepfakeBench/training/results/ #/home/rz/DeepfakeBench/preprocessing/logs
 
 # model setting
-pretrained: /data/home/zhiyuanyan/DeepfakeBench/training/pretrained/xception-b5690688.pth   # path to a pre-trained model, if using one
+pretrained: /home/rz/DeepfakeBench/training/pretrained/ucf_best.pth   # path to a pre-trained model, if using one
 # pretrained: '/home/zhiyuanyan/.cache/torch/hub/checkpoints/resnet34-b627a593.pth'   # path to a pre-trained model, if using one
 model_name: ucf   # model name
 backbone_name: xception  # backbone name
@@ -16,16 +16,16 @@ backbone_config:
   dropout: false
 
 # dataset
-all_dataset: [FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV]
-train_dataset: [FF-F2F, FF-DF, FF-FS, FF-NT,]
-test_dataset: [Celeb-DF-v2]
+all_dataset: [FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV, occlusion, no_occlusion]
+train_dataset: [occlusion] #[FF-F2F, FF-DF, FF-FS, FF-NT,] 
+test_dataset: [occlusion] #[FaceForensics++, DeepFakeDetection]
 dataset_type: pair
 
 compression: c23  # compression-level for videos
 train_batchSize: 16   # training batch size
 test_batchSize: 32   # test batch size
 workers: 8   # number of data loading workers
-frame_num: {'train': 32, 'test': 32}   # number of frames to use per video in training and testing
+frame_num: {'train': 100, 'test': 100} #{'train': 32, 'test': 32}   # number of frames to use per video in training and testing
 resolution: 256   # resolution of output image to network
 with_mask: false   # whether to include mask information in the input
 with_landmark: false   # whether to include facial landmark information in the input
@@ -67,6 +67,10 @@ label_dict:
   # roop
   roop_Fake: 1
   roop_Real: 0
+
+  # dfb_faces - occ/no_occ
+  real: 0
+  fake: 1
 
 
 
