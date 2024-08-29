@@ -144,7 +144,7 @@ class UCFDetector(AbstractDetector):
         return f_spe, f_share
     
     def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
-        if 'label_spe' in data_dict and 'recontruction_imgs' in pred_dict:
+        if 'label_spe' in data_dict and 'recontruction_imgs' in pred_dict: # train mode -> UCF: label_spe and recontruction_imgs -> CHECK PAPER!
             return self.get_train_losses(data_dict, pred_dict)
         else:  # test mode
             return self.get_test_losses(data_dict, pred_dict)
@@ -238,7 +238,7 @@ class UCFDetector(AbstractDetector):
             # inference only consider share loss
             out_sha, sha_feat = self.head_sha(f_share)
             out_spe, spe_feat = self.head_spe(f_spe)
-            prob_sha = torch.softmax(out_sha, dim=1)[:, 1]
+            prob_sha = torch.softmax(out_sha, dim=1)[:, 1] # prob for fake class
             self.prob.append(
                 prob_sha
                 .detach()

@@ -77,7 +77,7 @@ def create_logger(log_path):
     # Create file handler and set the formatter
     fh = logging.FileHandler(log_path)
     # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    formatter = logging.Formatter('%(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(message)s')
     # asctime: human-readable time when the LogRecord was created
     # levelname: the log level of the LogRecord (e.g. INFO, WARNING, etc.)
     # message: the log message

@@ -113,10 +113,13 @@ def test_one_dataset(model, data_loader):
             data_dict['landmark'] = landmark.to(device)
 
         # model forward without considering gradient computation
-        predictions = inference(model, data_dict)
-        label_lists += list(data_dict['label'].cpu().detach().numpy())
-        prediction_lists += list(predictions['prob'].cpu().detach().numpy())
-        feature_lists += list(predictions['feat'].cpu().detach().numpy())
+        predictions = inference(model, data_dict) # returns dict of {cls, prob, feat}
+        label_lists += list(data_dict['label'].cpu().detach().numpy()) # get the label values (Ground truth)
+        prediction_lists += list(predictions['prob'].cpu().detach().numpy()) # get the prediction values -> used to compute the predicted labels (if prob > 0.5, then the prediction is 1, else 0)
+        # prob has 2 values, the first one is the probability of being real, the second one is the probability of being fake
+        # in the prediction_lists there is only one value, which is the probability of being fake
+        # how is the prediction value calculated? -> the second value of the prob tensor (output of the classifier)
+        feature_lists += list(predictions['feat'].cpu().detach().numpy()) # get the feature values
     
     return np.array(prediction_lists), np.array(label_lists),np.array(feature_lists)
     
@@ -164,7 +167,7 @@ def test_epoch(model, test_data_loaders, logger, model_name, dataset_name, tags)
 
 @torch.no_grad()
 def inference(model, data_dict):
-    predictions = model(data_dict, inference=True)
+    predictions = model(data_dict, inference=True) # forward pass through the model -> forward function in the model class
     return predictions
 
 

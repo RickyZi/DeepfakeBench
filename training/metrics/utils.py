@@ -51,6 +51,11 @@ def check_graph_name(graph_path):
     return graph_path
 
 def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
+
+    # y_pred: predicted scores (probabilities) -> from the model classifying the images as real or fake
+        # if y_pred > 0.5 -> fake, else real labels [predicted labels] -> prediction_class
+    # y_true: true binary labels (ground truth, 0 or 1)
+
     # compute video-level auc for the frame-level methods.
     # img_names: list of image paths (list of tuples)
     def get_video_metrics(image, pred, label):
@@ -114,15 +119,16 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # y_true = true binary labels (ground truth, 0 or 1)
     # prediction_class = predicted class labels (0 or 1)
     # -------------------------------------------------------------------- #
-
+    # convert the predicted scores to numpy array
     y_pred = y_pred.squeeze() # remove the extra dimension (batch_size, 1) -> (batch_size, )
     # For UCF, where labels for different manipulations are not consistent.
-    y_true[y_true >= 1] = 1
+    y_true[y_true >= 1] = 1 # convert all labels >= 1 to 1
 
     
     # -------------------------------------------------------------------- #
-    # acc
+    # convert the predicted scores to class labels
     prediction_class = (y_pred > 0.5).astype(int) # convert prediction to class labels 
+    # if y_pred > 0.5 round to 1, else round to 0 [make it the closest integer]
 
     # -------------------------------------------------------------------- #
     # print("type(y_pred)", type(y_pred)) # ndarray
@@ -149,8 +155,7 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # type(prediction_class) <class 'numpy.ndarray'>
     # len(prediction_class) 4800
     # -------------------------------------------------------------------- #
-
-
+    # compute accuracy
     correct = (prediction_class == np.clip(y_true, a_min=0, a_max=1)).sum().item() 
     # correct: number of correct predictions -> sum of correct predictions
     # np.clip(y_true, a_min=0, a_max=1): clip the values in the array to be between 0 and 1
@@ -187,7 +192,11 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     acc_simswap = correct_simswap / total_simswap * 100
     acc_facedancer = correct_facedancer / total_facedancer * 100
     # -------------------------------------------------------------------- #
-
+    # balanced accuracy computation
+    balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) #, adjusted = True) 
+    # blanced accuracy -> the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes
+    # adjusted = True -> the balanced accuracy is adjusted for chance -> 0 for random predictions and 1 for perfect predictions
+    # if adjusted = False, the balanced accuracy is the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes. Random score = 0.5 
     # Ensure the directory exists
     output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
     if not os.path.exists(output_dir):
@@ -210,10 +219,15 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     TPR = tp / (tp + fn) # sensitivity, recall -> from all the positive classes, how many were correctly predicted
     # recall should be as high as possible -> we want to avoid false negatives -> max recall = 1
     TNR = tn / (tn + fp) # specificity -> from all the negative classes, how many were correctly predicted. Ideally, we want to avoid false positives -> max specificity = 1
+
+    # -------------------------------------------------------------------- #
+    # balanced acc computation
+    balanced_acc = (TPR + TNR) / 2 # balanced accuracy -> the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes
+
     # -------------------------------------------------------------------- #
     # auc
     fpr, tpr, _ = metrics.roc_curve(y_true, prediction_class, pos_label=1)
-    auc = metrics.auc(fpr, tpr)
+    auc = metrics.auc(fpr, tpr) # use the general function auc to compute the area under the curve
     # -------------------------------------------------------------------- #
     # display the ROC curve
     display_roc = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=auc)
@@ -249,7 +263,7 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # ideally we want the AP score to be as high as possible -> max AP = 1 -> curve that passes through (1,1)
 
     # compute the precision score
-    precision_scr = metrics.precision_score(y_true, prediction_class) 
+    # precision_scr = metrics.precision_score(y_true, prediction_class) 
     # precision_scr -> from all the classes we have predicted as positive, how many are actually positive.
     # precision should be as high as possible -> we want to avoid false positives -> max precision = 1
     # -------------------------------------------------------------------- #
@@ -266,19 +280,22 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
 
     # return {'acc': acc, 'auc': auc, 'eer': eer, 'ap': ap, 'pred': y_pred, 'video_auc': v_auc, 'label': y_true}
     return {
+        # metrics
         'acc': acc, # Accuracy
         # Accuracy for each algo: ghost, simswap, facedancer, original
         'test_accuracy_original': acc_original,
-        'test_accuracy_ghost': acc_ghost,
         'test_accuracy_simswap': acc_simswap,
+        'test_accuracy_ghost': acc_ghost,
         'test_accuracy_facedancer': acc_facedancer,
-        'auc': auc, # Area Under the ROC Curve
+        'auc': auc, # Area Under the ROC Curve  
         # 'video_auc': v_auc, # keep it? 
-        'eer': eer, # Equal Error Rate -> 
         'ap': ap, # Average Precision 
-        # -------------------------------------------------------------------- #
         'TPR': TPR, # True Positive Rate (Recall)
         'TNR': TNR, # True Negative Rate (Specificity)
+        'balanced_acc': balanced_acc, # Balanced Accuracy
+        'eer': eer, # Equal Error Rate 
+        # -------------------------------------------------------------------- #
+        # lists and paths of labels, predictions, and images
         # 'precision': precision_scr, # Precision
         # 'recall': list(recall),
         'pred': list(y_pred), # list of predictionù

@@ -114,9 +114,9 @@ class Xception(nn.Module):
             xception_config: configuration file with the dict format
         """
         super(Xception, self).__init__()
-        self.num_classes = xception_config["num_classes"]
+        self.num_classes = xception_config["num_classes"] # 2 classes (real/fake)
         self.mode = xception_config["mode"]
-        inc = xception_config["inc"]
+        inc = xception_config["inc"] # 3 channels
         dropout = xception_config["dropout"]
 
         # Entry flow
@@ -170,7 +170,8 @@ class Xception(nn.Module):
         if self.mode == 'adjust_channel_iid':
             final_channel = 512
             self.mode = 'adjust_channel'
-        self.last_linear = nn.Linear(final_channel, self.num_classes)
+        self.last_linear = nn.Linear(final_channel, self.num_classes) 
+        # last_linear is the classifier layer -> output 2 classes (real/fake)
         if dropout:
             self.last_linear = nn.Sequential(
                 nn.Dropout(p=dropout),

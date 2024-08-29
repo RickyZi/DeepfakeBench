@@ -42,18 +42,23 @@ parser = argparse.ArgumentParser(description='Process some paths.')
                     # default='/data/home/zhiyuanyan/DeepfakeBenchv2/training/config/detector/sbi.yaml',
                     # help='path to detector YAML file')
 parser.add_argument('--detector', type=str, default = 'xception', help='detector name')
-# parser.add_argument("--train_dataset", nargs="+")
-parser.add_argument("--test_dataset", nargs="+")
-parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True)
-parser.add_argument('--no-save_feat', dest='save_feat', action='store_false', default=True)
+parser.add_argument("--train_dataset", nargs="+")
+# parser.add_argument("--test_dataset", nargs="+") # nargs = '+' means one or more arguments, if not provided, default is None
+# flags for saving checkpoint and features (output of the model) -> --no-save-feat -> save_feat = False
+parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True) 
+parser.add_argument('--no-save_feat', dest='save_feat', action='store_false', default=True) 
+# data parallel config stuff
 parser.add_argument("--ddp", action='store_true', default=False) # whether to use distributed data parallel
 parser.add_argument('--local_rank', type=int, default=0) # local rank for distributed data parallel
+# task target -> for logging (?)
 parser.add_argument('--task_target', type=str, default="", help='specify the target of current training task') 
+# tags 
 parser.add_argument('--tags', type=str, default="", help='specify the tags of current training task')
 args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
 
+# initialize random seed for reproducibility -> fixed in the config file (1024)
 def init_seed(config):
     if config['manualSeed'] is None:
         config['manualSeed'] = random.randint(1, 10000)
@@ -168,7 +173,7 @@ def choose_optimizer(model, config):
             weight_decay=config['optimizer'][opt_name]['weight_decay']
         )
         return optimizer
-    elif opt_name == 'adam':
+    elif opt_name == 'adam': # use default optim
         optimizer = optim.Adam(
             params=model.parameters(),
             lr=config['optimizer'][opt_name]['lr'],
@@ -189,8 +194,7 @@ def choose_optimizer(model, config):
     # ---------------------------------------- #
     # -------------- Focal Loss -------------- #
     # ---------------------------------------- #
-    # check if definition ok!!!
-
+    # check if definition is correct!!!
     elif opt_name == 'focal_loss':
         optimizer = FocalLoss(
             alpha=config['optimizer'][opt_name]['alpha'], # default: 0.25
@@ -240,8 +244,22 @@ def choose_metric(config):
 
 
 def main():
+
+    if args.detector == 'xception':
+        detector_yaml = './config/detector/xception.yaml'
+        weights_path = './pretrained/xception_best.pth'
+        model_name = 'xception'
+    elif args.detector == 'ucf':
+        detector_yaml = './config/detector/ucf.yaml'
+        weights_path = './pretrained/ucf_best.pth'
+        model_name = 'ucf'
+    else:
+        raise NotImplementedError('detector {} is not implemented'.format(args.detector))
+
+
+
     # parse options and load config
-    with open(args.detector, 'r') as f:
+    with open(detector_yaml, 'r') as f:
         config = yaml.safe_load(f)
     with open('./training/config/train_config.yaml', 'r') as f:
         config2 = yaml.safe_load(f)
@@ -252,18 +270,23 @@ def main():
     if config['dry_run']: 
         config['nEpochs'] = 0
         config['save_feat']=False
+    
     # If arguments are provided, they will overwrite the yaml settings
     if args.train_dataset:
         config['train_dataset'] = args.train_dataset
     if args.test_dataset:
         config['test_dataset'] = args.test_dataset
+
     config['save_ckpt'] = args.save_ckpt
     config['save_feat'] = args.save_feat
+    
     if config['lmdb']:
         config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
+    
     # create logger
     timenow=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-    task_str = f"_{config['task_target']}" if config['task_target'] is not None else ""
+
+    task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" # MISSING??
     logger_path =  os.path.join(
                 config['log_dir'],
                 config['model_name'] + task_str + '_' + timenow
@@ -271,7 +294,8 @@ def main():
     os.makedirs(logger_path, exist_ok=True)
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info('Save log to {}'.format(logger_path))
-    config['ddp']= args.ddp
+
+    config['ddp']= args.ddp #
     # print configuration
     logger.info("--------------- Configuration ---------------")
     params_string = "Parameters: \n"
@@ -300,7 +324,7 @@ def main():
 
     # prepare the model (detector)
     model_class = DETECTOR[config['model_name']]
-    model = model_class(config)
+    model = model_class(config) # initialize the model -> calls method build_backbone -> loads pretrained model
 
     # prepare the optimizer
     optimizer = choose_optimizer(model, config)

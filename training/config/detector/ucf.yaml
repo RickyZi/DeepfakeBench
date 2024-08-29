@@ -16,7 +16,8 @@ backbone_config:
   dropout: false
 
 # dataset
-all_dataset: [FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV, occlusion, no_occlusion]
+all_dataset: [occlusion, no_occlusion, gotcha_occlusion, gotcha_no_occlusion]
+#[FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV,] 
 train_dataset: [occlusion] #[FF-F2F, FF-DF, FF-FS, FF-NT,] 
 test_dataset: [occlusion] #[FaceForensics++, DeepFakeDetection]
 dataset_type: pair

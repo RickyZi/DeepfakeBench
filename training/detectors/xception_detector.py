@@ -107,11 +107,13 @@ class XceptionDetector(AbstractDetector):
 
     def forward(self, data_dict: dict, inference=False) -> dict:
         # get the features by backbone
-        features = self.features(data_dict)
+        features = self.features(data_dict) # extract the features from the input image
         # get the prediction by classifier
-        pred = self.classifier(features)
+        pred = self.classifier(features) # compute the prediction by the classifier -> logits -> (batch_size, num_classes) -> pred of real or fake class
         # get the probability of the pred
-        prob = torch.softmax(pred, dim=1)[:, 1]
+        prob = torch.softmax(pred, dim=1)[:, 1] # softmax for the class 1 (fake) -> select the prob of the second class for each prediction in the batch
         # build the prediction dict for each output
         pred_dict = {'cls': pred, 'prob': prob, 'feat': features}
+        # cls: is the prediction of the classifier (logits), the shape is (batch_size, num_classes) -> pred of real or fake class
+        # prob: is the probability of the prediction, the shape is (batch_size,) -> prob of fake class (1)
         return pred_dict

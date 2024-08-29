@@ -42,3 +42,7 @@ label_dict:
   real: 0
   fake: 1
   # ------------------------------ #
+  # gotcha dataset
+  gotcha_real: 0
+  gotcha_fake: 1
+  # ------------------------------ #
