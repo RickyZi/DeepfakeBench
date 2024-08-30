@@ -203,8 +203,8 @@ class Trainer(object):
             else:
                 losses = self.model.get_losses(data_dict, predictions)
             self.optimizer.zero_grad()
-            losses['overall'].backward()
-            self.optimizer.step()
+            losses['overall'].backward() # compute gradient 
+            self.optimizer.step() # update parameters 
 
 
             return losses,predictions
@@ -264,45 +264,49 @@ class Trainer(object):
             for name, value in losses.items():
                 train_recorder_loss[name].update(value)
 
-            # run tensorboard to visualize the training process
-            if iteration % 300 == 0 and self.config['local_rank']==0:
-                if self.config['SWA'] and (epoch>self.config['swa_start'] or self.config['dry_run']):
-                    self.scheduler.step()
-                # info for loss
-                loss_str = f"Iter: {step_cnt}    "
-                for k, v in train_recorder_loss.items():
-                    v_avg = v.average()
-                    if v_avg == None:
-                        loss_str += f"training-loss, {k}: not calculated"
-                        continue
-                    loss_str += f"training-loss, {k}: {v_avg}    "
-                    # tensorboard-1. loss
-                    writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
-                    writer.add_scalar(f'train_loss/{k}', v_avg, global_step=step_cnt)
-                self.logger.info(loss_str)
-                # info for metric
-                metric_str = f"Iter: {step_cnt}    "
-                for k, v in train_recorder_metric.items():
-                    v_avg = v.average()
-                    if v_avg == None:
-                        metric_str += f"training-metric, {k}: not calculated    "
-                        continue
-                    metric_str += f"training-metric, {k}: {v_avg}    "
-                    # tensorboard-2. metric
-                    writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
-                    writer.add_scalar(f'train_metric/{k}', v_avg, global_step=step_cnt)
-                self.logger.info(metric_str)
+            # # run tensorboard to visualize the training process
+            # # Logs loss and metric values to TensorBoard every 300 iterations.
+            # # Logs the average loss and metrics to the logger.
+            # # Clears the recorders for loss and metrics after logging.
+
+            # if iteration % 300 == 0 and self.config['local_rank']==0:
+            #     if self.config['SWA'] and (epoch>self.config['swa_start'] or self.config['dry_run']):
+            #         self.scheduler.step()
+            #     # info for loss
+            #     loss_str = f"Iter: {step_cnt}    "
+            #     for k, v in train_recorder_loss.items():
+            #         v_avg = v.average()
+            #         if v_avg == None:
+            #             loss_str += f"training-loss, {k}: not calculated"
+            #             continue
+            #         loss_str += f"training-loss, {k}: {v_avg}    "
+            #         # tensorboard-1. loss
+            #         writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
+            #         writer.add_scalar(f'train_loss/{k}', v_avg, global_step=step_cnt)
+            #     self.logger.info(loss_str)
+            #     # info for metric
+            #     metric_str = f"Iter: {step_cnt}    "
+            #     for k, v in train_recorder_metric.items():
+            #         v_avg = v.average()
+            #         if v_avg == None:
+            #             metric_str += f"training-metric, {k}: not calculated    "
+            #             continue
+            #         metric_str += f"training-metric, {k}: {v_avg}    "
+            #         # tensorboard-2. metric
+            #         writer = self.get_writer('train', ','.join(self.config['train_dataset']), k)
+            #         writer.add_scalar(f'train_metric/{k}', v_avg, global_step=step_cnt)
+            #     self.logger.info(metric_str)
 
 
 
-                # clear recorder.
-                # Note we only consider the current 300 samples for computing batch-level loss/metric
-                for name, recorder in train_recorder_loss.items():  # clear loss recorder
-                    recorder.clear()
-                for name, recorder in train_recorder_metric.items():  # clear metric recorder
-                    recorder.clear()
+            #     # clear recorder.
+            #     # Note we only consider the current 300 samples for computing batch-level loss/metric
+            #     for name, recorder in train_recorder_loss.items():  # clear loss recorder
+            #         recorder.clear()
+            #     for name, recorder in train_recorder_metric.items():  # clear metric recorder
+            #         recorder.clear()
 
-            # run test
+            # run test 
             if (step_cnt+1) % test_step == 0:
                 if test_data_loaders is not None and (not self.config['ddp'] ):
                     self.logger.info("===> Test start!")

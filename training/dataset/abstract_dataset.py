@@ -312,6 +312,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             # occlusion and no_occlusion dataset already have the path for loading the images
             if self.config['test_dataset'] == 'occlusion' or  self.config['test_dataset'] == 'no_occlusion':
                 img = cv2.imread(file_path)
+            elif self.config['training_dataset'] == 'occlusion' or  self.config['training_dataset'] == 'no_occlusion':
+                img = cv2.imread(file_path)
             else:
                 # check rgb_dir path
                 if not file_path[0] == '.':

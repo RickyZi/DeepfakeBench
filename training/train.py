@@ -58,6 +58,10 @@ args = parser.parse_args()
 torch.cuda.set_device(args.local_rank)
 
 
+# ---------------------------------------- #
+# python train.py --detector "xception" --train_dataset "thesis_occ" --tags "Xception_thesis_occ_TL" 
+# ---------------------------------------- #
+
 # initialize random seed for reproducibility -> fixed in the config file (1024)
 def init_seed(config):
     if config['manualSeed'] is None:
@@ -173,7 +177,7 @@ def choose_optimizer(model, config):
             weight_decay=config['optimizer'][opt_name]['weight_decay']
         )
         return optimizer
-    elif opt_name == 'adam': # use default optim
+    elif opt_name == 'adam': # default optim
         optimizer = optim.Adam(
             params=model.parameters(),
             lr=config['optimizer'][opt_name]['lr'],
@@ -245,10 +249,27 @@ def choose_metric(config):
 
 def main():
 
+
+    # ---------------------------------------- #
+    # TODO:
+    # error in loading the dataset : 
+    #Error loading image at index 0: ././datasets/rgb\/media/data/rz_dataset/dfb_faces/occlusion/training/user_684510/simswap/obj_occlusion_3/180.png does not exist
+    # check where the img is wrongly loaded in the abstract_dataset.py file
+
+    # do i need to use the test_dataset argument? i just want to train the model... not sure what the test_dataset is used for here
+    # check how tensorboard is used in the code and if its possible to remove it
+
+    # try to train the model using the defaul values in the config file
+
+    # check the xception.yaml file on the vm and see how the train/test dataset was defined 
+    # (i might have change it to [occlusion / no_occlusion]), before were only the paper's datasets
+    # ---------------------------------------- #
+
     if args.detector == 'xception':
         detector_yaml = './config/detector/xception.yaml'
         weights_path = './pretrained/xception_best.pth'
         model_name = 'xception'
+
     elif args.detector == 'ucf':
         detector_yaml = './config/detector/ucf.yaml'
         weights_path = './pretrained/ucf_best.pth'
@@ -257,17 +278,23 @@ def main():
         raise NotImplementedError('detector {} is not implemented'.format(args.detector))
 
 
-
     # parse options and load config
     with open(detector_yaml, 'r') as f:
         config = yaml.safe_load(f)
+
     with open('./training/config/train_config.yaml', 'r') as f:
         config2 = yaml.safe_load(f)
+
     if 'label_dict' in config:
         config2['label_dict']=config['label_dict']
+
     config.update(config2)
+
+    # local rank for distributed data parallel training (ddp) -> set to 0 if not using ddp
+    # where is defined?
     config['local_rank']=args.local_rank
-    if config['dry_run']: 
+
+    if config['dry_run']: # if dry_run is set to True, the model will not be trained
         config['nEpochs'] = 0
         config['save_feat']=False
     
@@ -282,11 +309,14 @@ def main():
     
     if config['lmdb']:
         config['dataset_json_folder'] = 'preprocessing/dataset_json_v3'
+
+    if 'task_target' not in config:
+        config['task_target'] = None
     
     # create logger
     timenow=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-    task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" # MISSING??
+    task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" 
     logger_path =  os.path.join(
                 config['log_dir'],
                 config['model_name'] + task_str + '_' + timenow
@@ -295,7 +325,7 @@ def main():
     logger = create_logger(os.path.join(logger_path, 'training.log'))
     logger.info('Save log to {}'.format(logger_path))
 
-    config['ddp']= args.ddp #
+    config['ddp']= args.ddp
     # print configuration
     logger.info("--------------- Configuration ---------------")
     params_string = "Parameters: \n"

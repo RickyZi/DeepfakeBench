@@ -50,7 +50,9 @@ parser.add_argument('--tags', type=str, default="occlusion", help='tags for the 
 #parser.add_argument("--lmdb", action='store_true', default=False)
 args = parser.parse_args()
 
-
+# -------------------------------------- #
+# python test.py --detector "xception" --test_dataset "thesis_occ" --tags "Xception_thesis_occ_GEN"
+# -------------------------------------- #
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
