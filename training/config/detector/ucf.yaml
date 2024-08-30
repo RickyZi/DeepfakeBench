@@ -16,10 +16,10 @@ backbone_config:
   dropout: false
 
 # dataset
-all_dataset: [occlusion, no_occlusion, gotcha_occlusion, gotcha_no_occlusion]
+all_dataset: [thesis_occ, thesis_no_occ, gotcha_occ, gotcha_no_occ]
 #[FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV,] 
-train_dataset: [occlusion] #[FF-F2F, FF-DF, FF-FS, FF-NT,] 
-test_dataset: [occlusion] #[FaceForensics++, DeepFakeDetection]
+train_dataset: [thesis_occ] #[FF-F2F, FF-DF, FF-FS, FF-NT,] 
+test_dataset: [thesis_occ] #[FaceForensics++, DeepFakeDetection]
 dataset_type: pair
 
 compression: c23  # compression-level for videos

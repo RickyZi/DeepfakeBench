@@ -44,8 +44,8 @@ label_dict:
 
   # ------------------------------ #
   # TODO: add my dataset labels here!!!!
-  # real: 0
-  # fake: 1
+  real: 0
+  fake: 1
   # ------------------------------ #
   # gotcha dataset
   # gotcha_real: 0

@@ -449,7 +449,7 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
     # ------------------- Test My Dataset ------------------- #
     # ------------------------------------------------------- #
 
-    elif  dataset_name == 'occlusion' or dataset_name == 'no_occlusion': # dataset_name == 'user_faces_no_occlusion' or
+    elif  dataset_name == 'thesis_occ' or dataset_name == 'thesis_no_occ': # dataset_name == 'user_faces_no_occlusion' or
         dataset_path = os.path.join(dataset_root_path, dataset_name)
         print("dataset path", dataset_path)
         # breakpoint()
@@ -534,7 +534,7 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
     # --------------------------------------------------- #
     # ------------------- Test GOTCHA ------------------- #
     # --------------------------------------------------- #
-    elif dataset_name == 'gotcha_occlusion' or dataset_name == 'gotcha_no_occlusion':
+    elif dataset_name == 'gotcha_occ' or dataset_name == 'gotcha_no_occ':
         # reorganize the GOTCHA dataset
         dataset_path = os.path.join(dataset_root_path, dataset_name)
         dataset_dict[dataset_name] = {'gotcha_real': {},
@@ -660,7 +660,7 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
     # Convert the dataset dictionary to JSON format and save to file
     output_file_path = os.path.join(output_file_path, dataset_name + '.json')
 
-    if dataset_name == 'occlusion' or dataset_name == 'no_occlusion' or dataset_name == 'gotcha_occlusion' or dataset_name == 'gotcha_no_occlusion':
+    if dataset_name == 'thesis_occ' or dataset_name == 'thesis_no_occ' or dataset_name == 'gotcha_occ' or dataset_name == 'gotcha_no_occ':
         with open(output_file_path, 'w') as f:
             json.dump(dataset_dict, f, indent=4)
     else: 
