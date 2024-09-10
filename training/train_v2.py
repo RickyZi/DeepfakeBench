@@ -30,12 +30,36 @@ from optimizor.SAM import SAM
 from optimizor.LinearLR import LinearDecayLR
 from optimizor.focalLoss import FocalLoss
 
-from trainer.trainer import Trainer
+# from trainer.trainer_v2 import Trainer
+from trainer.trainer_v2 import Trainer
 from detectors import DETECTOR
 from dataset import *
 from metrics.utils import parse_metric_for_print
 from logger import create_logger, RankFilter
 
+
+# ---------------------------------------- #
+# CustomSubset class to create a subset of a dataset with the same attributes as the original dataset
+from torch.utils.data import Dataset, Subset
+
+class CustomSubset(Subset):
+    def __init__(self, dataset, indices):
+        super().__init__(dataset, indices)
+        # extract only a subset of the dataset with the given indices
+        # self.dataset = dataset
+        self.dataset = dataset
+        # self.indices = indices
+
+    # def __getitem__(self, idx):
+    #     return self.dataset[self.indices[idx]]  # Return the item at the given index in the subset
+    
+    # def __len__(self):
+    #     # return len(self.indices)
+    #     return len(self.dataset) # Return the length of the subset
+
+    def __getattr__(self, name):
+        return getattr(self.dataset, name) # Delegate attribute access to the original dataset
+# ---------------------------------------- #
 
 parser = argparse.ArgumentParser(description='Process some paths.')
 # parser.add_argument('--detector_path', type=str,
@@ -61,6 +85,8 @@ torch.cuda.set_device(args.local_rank)
 
 # ---------------------------------------- #
 # python train.py --detector "xception" --train_dataset "thesis_occ" --tags "Xception_thesis_occ_TL" 
+
+# python train_v2.py --detector "xception" --tags "Xception-thesis-occ-TL" --train_dataset "occlusion" --test_dataset "occlusion"
 # ---------------------------------------- #
 
 # initialize random seed for reproducibility -> fixed in the config file (1024)
@@ -129,9 +155,29 @@ def prepare_training_data(config):
                 batch_size=config['train_batchSize'],
                 shuffle=True,
                 num_workers=int(config['workers']),
-                collate_fn=train_set.collate_fn, # collate_fn -> how to collate the data, collate means to combine the data into a single dataset (batch)
+                collate_fn=train_set.collate_fn,
                 )
     return train_data_loader
+
+# def prepare_train_dataloader(config):
+#     # Use the custom Subset class
+#     # trn_indices = list(range(trn_size))
+#     # val_indices = list(range(trn_size, len(train_dataset))) # 9600, 12000
+#     train_set = DeepfakeAbstractBaseDataset(
+#                     config=config,
+#                     mode='train',
+#                     # indicies= trn_indices
+#                 )
+    
+#     train_data_loader = torch.utils.data.DataLoader(
+#         dataset=train_set,
+#         batch_size=config['train_batchSize'],
+#         shuffle=True,
+#         num_workers=int(config['workers']),
+#         collate_fn=train_set.collate_fn,
+#         drop_last = True, # drop the last batch if it is not full
+#     )
+#     return train_data_loader
 
 
 def prepare_testing_data(config):
@@ -157,15 +203,17 @@ def prepare_testing_data(config):
                 shuffle=False,
                 num_workers=int(config['workers']),
                 collate_fn=test_set.collate_fn,
-                drop_last = (test_name=='DeepFakeDetection'),
+                drop_last = (test_name=='DeepFakeDetection'), # drop the last batch if it is not full (only for DeepFakeDetection dataset)
             )
 
         return test_data_loader
 
     test_data_loaders = {}
     for one_test_name in config['test_dataset']:
+        # config['test_dataset'] = ['occlusion'] -> one_test_name = ['occlusion']
         test_data_loaders[one_test_name] = get_test_data_loader(config, one_test_name)
     return test_data_loaders
+
 
 
 def choose_optimizer(model, config):
@@ -264,6 +312,9 @@ def main():
 
     # check the xception.yaml file on the vm and see how the train/test dataset was defined 
     # (i might have change it to [occlusion / no_occlusion]), before were only the paper's datasets
+
+    # test model with default values in the config file first
+
     # ---------------------------------------- #
 
     if args.detector == 'xception':
@@ -283,7 +334,7 @@ def main():
     with open(detector_yaml, 'r') as f:
         config = yaml.safe_load(f)
 
-    with open('./training/config/train_config.yaml', 'r') as f:
+    with open('./config/train_config.yaml', 'r') as f:
         config2 = yaml.safe_load(f)
 
     if 'label_dict' in config:
@@ -302,8 +353,22 @@ def main():
     # If arguments are provided, they will overwrite the yaml settings
     if args.train_dataset:
         config['train_dataset'] = args.train_dataset
+    else:
+        args.train_dataset = config['train_dataset']
+
     if args.test_dataset:
         config['test_dataset'] = args.test_dataset
+    else:
+        args.test_dataset = config['test_dataset']
+
+    # print("train_dataset", args.train_dataset)
+    # print("test_dataset", args.test_dataset)
+    # breakpoint()
+
+    print("metric scoring: ", config['metric_scoring'])
+    print("using accuracy (acc) as metric scoring")
+    config['metric_scoring'] = 'acc'
+    print("metric scoring: ", config['metric_scoring'])
 
     config['save_ckpt'] = args.save_ckpt
     config['save_feat'] = args.save_feat
@@ -316,11 +381,11 @@ def main():
         config['task_target'] = None
     
     # create logger
-    # # create logger for saving testing results
+    # create logger for saving testing results
     # if args.tags:
     #     log_path = config['log_dir']+'/'+ args.tags + '/testing/logs/test_output.log'
     # else:
-    #     log_path = config['log_dir'] + '/' + model_name + '/dfb_' + dataset_name + '/test_output.log'
+    #     log_path = config['log_dir'] + '/' + model_name + '/dfb_' + config['train_dataset'][0] + '/test_output.log'
 
     # if not os.path.exists(log_path):
     #     os.makedirs(os.path.dirname(log_path), exist_ok=True) # create the directory if it does not exist
@@ -340,6 +405,8 @@ def main():
     logger.info('Save log to {}'.format(logger_path))
 
     config['ddp']= args.ddp
+    print("ddp: ", config['ddp'])
+
     # print configuration
     logger.info("--------------- Configuration ---------------")
     params_string = "Parameters: \n"
@@ -361,15 +428,145 @@ def main():
         )
         logger.addFilter(RankFilter(0))
 
-    # prepare the training data loader
-    train_data_loader = prepare_training_data(config) 
 
-    # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config)
+    # split the training dataset into trn and val (80, 20 split), use the random seed in the config file
+    # use random split
+    # train_dataset = config['train_dataset']
+    # load the dataset from config file
+    train_dataset = DeepfakeAbstractBaseDataset(
+                    config=config,
+                    mode='train',
+                )
+    
+    # print("type(train_dataset):", train_dataset)
+    # print("loaded train dataset")
+    # val_dataset = DeepfakeAbstractBaseDataset(
+    #                 config=config,
+    #                 mode='train', # load trn dataset (if test load the test dataset)
+    #             )
+    # print("loaded val dataset")
+    # print("len(train_dataset): ", len(train_dataset))
+    # print("len(val_dataset): ", len(val_dataset))
+    # if both set to train: 
+    # len(train_dataset):  12000
+    # len(val_dataset):  12000 -> if set to test: 4800
+    # print("loaded train dataset")
+    # breakpoint()
+    trn_size = int(len(train_dataset) * 0.8)
+    val_size = int(len(train_dataset)) - trn_size
+
+    # print(f"dataset size: {len(train_dataset)}") # 12000
+    # 600 imgs per challenge
+    # 4 methods
+    # 5 users
+    # tot 12000 imgs
+    # print(f"Training dataset size: {trn_size}") # 9600
+    # print(f"Validation dataset size: {val_size}") # 2400
+
+    # trn_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [trn_size, val_size])
+    # return two datasets: trn_dataset and val_dataset
+    # print(f"Training dataset size: {len(trn_dataset)}")
+    # print(f"Validation dataset size: {len(val_dataset)}")
+    # breakpoint()
+
+    # Use the custom Subset class
+    trn_indices = list(range(trn_size))
+    val_indices = list(range(trn_size, len(train_dataset))) # 9600, 12000
+
+    trn_dataset = DeepfakeAbstractBaseDataset(
+                    config=config,
+                    mode='train',
+                    indicies=trn_indices
+                )
+
+    vld_dataset = DeepfakeAbstractBaseDataset(
+                    config=config,
+                    mode='train',
+                    indicies=val_indices,
+                    # val = True
+                )
+
+
+    print("len(trn_dataset)", len(trn_dataset)) # 9600
+    print("len(vld_dataset)", len(vld_dataset)) # 2400
+    # breakpoint()
+
+    # train_dataset = CustomSubset(train_dataset, trn_indices)
+    # val_dataset = CustomSubset(val_dataset, val_indices)
+
+    # train_subset = CustomSubset(train_dataset, trn_indices)
+    # val_subset = CustomSubset(train_dataset, val_indices)
+
+    # print(f"Training dataset size: {len(train_subset)}")
+    # print(f"Validation dataset size: {len(val_subset)}")
+    # breakpoint()
+
+    # prepare the training data loader 
+    # train_data_loader = prepare_train_dataloader(trn_dataset, config)
+
+    # train_data_loader = prepare_training_data(config, trn_indices) 
+    # train_data_loader = prepare_training_data(trn_dataset, config)
+    train_data_loader = \
+            torch.utils.data.DataLoader(
+                # dataset=train_subset,
+                dataset = trn_dataset,
+                batch_size=config['train_batchSize'],
+                shuffle=True,
+                num_workers=int(config['workers']),
+                collate_fn=train_dataset.collate_fn,
+                # drop_last = True, # drop the last batch if it is not full
+                )
+    # # print(train_data_loader.keys())
+    # # breakpoint()
+
+    # # prepare the testing data loader
+    # val_data_loader = prepare_val_dataloader(config, val_indices)
+
+    val_data_loaders = {}
+
+    # val_data_loader = prepare_test_dataloader(val_dataset, config, config['test_dataset'][0]) # only one test dataset is used 
+    # # test_data_loaders = prepare_testing_data(config)
+    # # test_data_loaders = prepare_testing_data(val_dataset, config)
+    val_data_loader = torch.utils.data.DataLoader(
+                # dataset=val_subset,
+                dataset = vld_dataset,
+                batch_size=config['test_batchSize'],
+                shuffle=False,
+                num_workers=int(config['workers']),
+                collate_fn=train_dataset.collate_fn,
+                # drop_last = (test_name=='DeepFakeDetection'),
+            )
+    
+    test_name = config['train_dataset'][0]
+    # print("test_name:", test_name)
+    val_data_loaders[test_name] = val_data_loader 
+    # print(val_data_loader.keys())
+
+    # ---------------------------------------- #
+    # # check data dict length
+    # trn_data_dict = train_data_loader.dataset.data_dict['image']
+    # print("len(trn_data_dict['image']): ", len(trn_data_dict)) # 9600
+    # val_data_dict = val_data_loaders[test_name].dataset.data_dict['image']
+    # print("len(val_data_dict['image']): ", len(val_data_dict)) # 2400
+
+    # trn_data_dict = train_data_loader.dataset.data_dict['label']
+    # print("len(trn_data_dict['label']): ", len(trn_data_dict)) # 9600
+    # val_data_dict = val_data_loaders[test_name].dataset.data_dict['label']
+    # print("len(val_data_dict['label']): ", len(val_data_dict)) # 2400
+
+    # breakpoint()
+    
+    # print("trn_data_dict['image']:", trn_data_dict)
+    # print("val_data_dict['image']:", val_data_dict)
+
+    # breakpoint()
+    # ---------------------------------------- #
 
     # prepare the model (detector)
+    print("prepare the model:", config['model_name'])
     model_class = DETECTOR[config['model_name']]
-    model = model_class(config) # initialize the model -> calls method build_backbone -> loads pretrained model
+    model = model_class(config) # initialize the model -> calls method build_backbone -> loads pretrained model 
+    print("model loaded!")
 
     # prepare the optimizer
     optimizer = choose_optimizer(model, config)
@@ -384,12 +581,13 @@ def main():
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
 
     # start training
-    for epoch in range(config['start_epoch'], config['nEpochs']): # + 1): # range(0, 10) -> 0, 1, 2, ..., 9 (10 is not included)
+    print("Start training...")
+    for epoch in range(config['start_epoch'], config['nEpochs'] + 1): # range(0, 10) -> 0, 1, 2, ..., 9 (10 is not included)
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
                     epoch=epoch,
                     train_data_loader=train_data_loader,
-                    test_data_loaders=test_data_loaders,
+                    test_data_loaders=val_data_loaders,
                 )
         if best_metric is not None:
             logger.info(f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")

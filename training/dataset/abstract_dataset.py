@@ -44,7 +44,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
     """
     Abstract base class for all deepfake datasets.
     """
-    def __init__(self, config=None, mode='train'):
+    def __init__(self, config=None, mode='train', indicies = None): #, val = False):
         """Initializes the dataset object.
 
         Args:
@@ -58,7 +58,14 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         # Set the configuration and mode
         self.config = config
         self.mode = mode
-        print("self.mode", mode)
+        # print("self.mode", mode)
+        self.indicies = indicies
+        # self.val = val
+
+        # print(type(self.config['train_dataset']))
+        # print(type(self.config['test_dataset']))
+        # breakpoint()
+
         self.compression = config['compression']
         self.frame_num = config['frame_num'][mode]
 
@@ -67,17 +74,33 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.clip_size = config.get('clip_size', None)
         self.lmdb = config.get('lmdb', False)
         # print("self.lmdb", self.lmdb)
+
+        self.dataset = self.config['train_dataset'] if self.mode == 'train' else self.config['test_dataset']
+        # print("dataset: ", self.dataset) # occlusion or no_occlusion
+        # print("self.config['test_dataset']", self.config['test_dataset'])
+        # add a flag for rgb?
+        # self.rgb = config.get('rgb', False) # if use rgb images
         # breakpoint()
+
+
         # Dataset dictionary
         self.image_list = []
         self.label_list = []
         
         # Set the dataset dictionary based on the mode
         if mode == 'train':
+            # if indicies is not None:
+            #     print("trn_indicies")
+            #     dataset_list = [config['train_dataset'][i] for i in indicies]
+            # else:
             dataset_list = config['train_dataset']
             # Training data should be collected together for training
             image_list, label_list = [], []
             for one_data in dataset_list:
+                # tmp_image, tmp_label, tmp_name = self.collect_img_and_label_for_one_dataset(one_data)
+                # if self.indicies is not None:
+                #     tmp_image_list, tmp_label_list, tmp_name_list = self.collect_img_and_label_for_one_dataset(one_data, self.indicies)
+                # else:
                 tmp_image, tmp_label, tmp_name = self.collect_img_and_label_for_one_dataset(one_data)
                 image_list.extend(tmp_image)
                 label_list.extend(tmp_label)
@@ -92,12 +115,25 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     lmdb_path = os.path.join(config['lmdb_dir'], f"{dataset_list[0] if dataset_list[0] not in FFpp_pool else 'FaceForensics++'}_lmdb")
                     self.env = lmdb.open(lmdb_path, create=False, subdir=True, readonly=True, lock=False)
         elif mode == 'test':
+            # if self.val == True:
+            #     print("validation dataset")
+            #     one_data = config['train_dataset']
+            # else:
             one_data = config['test_dataset']
             # Test dataset should be evaluated separately. So collect only one dataset each time
             image_list, label_list, name_list = self.collect_img_and_label_for_one_dataset(one_data)
             if self.lmdb:
                 lmdb_path = os.path.join(config['lmdb_dir'], f"{one_data}_lmdb" if one_data not in FFpp_pool else 'FaceForensics++_lmdb')
                 self.env = lmdb.open(lmdb_path, create=False, subdir=True, readonly=True, lock=False)
+        
+        # elif mode == 'val': # mode doesn't exists in the train_config.yaml file
+        #     if indicies is not None:
+        #         print("val_indicies")
+        #         dataset_list = [config['train_dataset'][i] for i in indicies]
+        #         image_list, label_list, name_list = self.collect_img_and_label_for_one_dataset(one_data)
+        #     else:
+        #         print("no val_indicies")
+
         else:
             raise NotImplementedError('Only train and test modes are supported.')
 
@@ -145,6 +181,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
         Args:
             dataset_name (str): A list containing one dataset information. e.g., 'FF-F2F'
+            indicies (list): A list of indicies to select specific data points.
 
         Returns:
             list: A list of image paths.
@@ -195,7 +232,15 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             
             # print(dataset_info[dataset_name][label][self.mode])
 
+            # sub_dataset_info = dataset_info[dataset_name][label][self.mode]
+            # -------------------------------------------------------------------- #
+            # if indicies is not None:
+            #     sub_dataset_info = [dataset_info[dataset_name][label][self.mode][i] for i in indicies] # select the specific data points
+            # else:
             sub_dataset_info = dataset_info[dataset_name][label][self.mode]
+            # -------------------------------------------------------------------- #
+
+
             # Special case for FaceForensics++ and DeepFakeDetection, choose the compression type
             if cp == None and dataset_name in ['FF-DF', 'FF-F2F', 'FF-FS', 'FF-NT', 'FaceForensics++','DeepFakeDetection','FaceShifter']:
                 sub_dataset_info = sub_dataset_info[self.compression]
@@ -211,7 +256,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 if video_info['label'] not in self.config['label_dict']:
                     raise ValueError(f'Label {video_info["label"]} is not found in the configuration file.')
                 label = self.config['label_dict'][video_info['label']]
+                # print("label:", label)
                 frame_paths = video_info['frames']
+                # print("frame_paths[0]:", frame_paths[0])
                 # sorted video path to the lists
                 if '\\' in frame_paths[0]:
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('\\')[-1].split('.')[0]))
@@ -279,10 +326,21 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     frame_path_list.extend(frame_paths)
                     # video name save
                     video_name_list.extend([unique_video_name] * len(frame_paths))
+
+                    # print("len(label_list)", len(label_list))
+                    # print("len(frame_path_list):", len(frame_path_list))
+                    # print("len(video_name_list):", len(video_name_list))
+
+
+        if self.indicies:
+            label_list = [label_list[i] for i in self.indicies]
+            frame_path_list = [frame_path_list[i] for i in self.indicies]
+            video_name_list = [video_name_list[i] for i in self.indicies]
+
         
 
         # if self.mode == 'train':
-        # Shuffle the label and frame path lists in the same order
+            # Shuffle the label and frame path lists in the same order
         shuffled = list(zip(label_list, frame_path_list, video_name_list))
         random.shuffle(shuffled)
         label_list, frame_path_list, video_name_list = zip(*shuffled)
@@ -304,16 +362,17 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             ValueError: If the loaded image is None.
         """
         size = self.config['resolution'] # if self.mode == "train" else self.config['resolution']
+
         if not self.lmdb:
             # print("file_path:", file_path)
             # print("file_path[0]:", file_path[0])
 
             # ------------------------------------------------------------------------------- #
-            # occlusion and no_occlusion dataset already have the path for loading the images
-            if self.config['test_dataset'] == 'occlusion' or  self.config['test_dataset'] == 'no_occlusion':
+            # occlusion and no_occlusion dataset already have the path for loading the images #
+            if self.dataset == ['occlusion'] or  self.dataset == ['no_occlusion'] or self.dataset == 'occlusion' or  self.dataset == 'no_occlusion': 
+                # print("my dataset")
                 img = cv2.imread(file_path)
-            elif self.config['training_dataset'] == 'occlusion' or  self.config['training_dataset'] == 'no_occlusion':
-                img = cv2.imread(file_path)
+                # breakpoint()
             else:
                 # check rgb_dir path
                 if not file_path[0] == '.':

@@ -5,7 +5,9 @@ import numpy as np
 import os
 
 def parse_metric_for_print(metric_dict):
+    # print(metric_dict)
     if metric_dict is None:
+        print("metric dict is none!")
         return "\n"
     str = "\n"
     str += "================================ Each dataset best metric ================================ \n"
@@ -50,12 +52,7 @@ def check_graph_name(graph_path):
             i += 1
     return graph_path
 
-def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
-
-    # y_pred: predicted scores (probabilities) -> from the model classifying the images as real or fake
-        # if y_pred > 0.5 -> fake, else real labels [predicted labels] -> prediction_class
-    # y_true: true binary labels (ground truth, 0 or 1)
-
+def get_test_metrics(y_pred, y_true, img_names, tags=''): # model, dataset, 
     # compute video-level auc for the frame-level methods.
     # img_names: list of image paths (list of tuples)
     def get_video_metrics(image, pred, label):
@@ -119,17 +116,18 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # y_true = true binary labels (ground truth, 0 or 1)
     # prediction_class = predicted class labels (0 or 1)
     # -------------------------------------------------------------------- #
-    # convert the predicted scores to numpy array
     y_pred = y_pred.squeeze() # remove the extra dimension (batch_size, 1) -> (batch_size, )
     # For UCF, where labels for different manipulations are not consistent.
-    y_true[y_true >= 1] = 1 # convert all labels >= 1 to 1
+    y_true[y_true >= 1] = 1
 
-    
+    # print("len(y_true)", len(y_true)) # 2400 -> # test images
+    # print("len(y_pred)", len(y_pred)) # 2400 -> # test images
+    # print("len(img_names)", len(img_names)) # 2400 -> # test images
+    # breakpoint()
     # -------------------------------------------------------------------- #
-    # convert the predicted scores to class labels
+    # acc
     prediction_class = (y_pred > 0.5).astype(int) # convert prediction to class labels 
-    # if y_pred > 0.5 round to 1, else round to 0 [make it the closest integer]
-
+    # print("len(prediction_class)", len(prediction_class)) # 2400
     # -------------------------------------------------------------------- #
     # print("type(y_pred)", type(y_pred)) # ndarray
     # print("len(y_pred)", len(y_pred)) # 4800 -> # test images
@@ -138,11 +136,11 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # print("len(y_true)", len(y_true)) # 4800 -> # test images
     # print("y_true[:10]", y_true[:10])
     
-    # # print("len(prediciton_class)", len(prediction_class)) # 4800 -> # test images
+    # print("len(prediciton_class)", len(prediction_class)) # 4800 -> # test images
     # print("prediction_class[:10]", prediction_class[:10]) # print the first 10 predictions
     # print("type(prediction_class)", type(prediction_class)) # numpy.ndarray
     # print("len(prediction_class)", len(prediction_class)) # 4800
-    # breakpoint()
+    # # breakpoint()
     # -------------------------------------------------------------------- #
     # type(y_pred) <class 'numpy.ndarray'>
     # len(y_pred) 4800
@@ -155,7 +153,8 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # type(prediction_class) <class 'numpy.ndarray'>
     # len(prediction_class) 4800
     # -------------------------------------------------------------------- #
-    # compute accuracy
+
+
     correct = (prediction_class == np.clip(y_true, a_min=0, a_max=1)).sum().item() 
     # correct: number of correct predictions -> sum of correct predictions
     # np.clip(y_true, a_min=0, a_max=1): clip the values in the array to be between 0 and 1
@@ -187,16 +186,19 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
             if prediction_class[i] == y_true[i]:
                 correct_facedancer += 1
 
-    acc_original = correct_original / total_original * 100
-    acc_ghost = correct_ghost / total_ghost * 100
-    acc_simswap = correct_simswap / total_simswap * 100
-    acc_facedancer = correct_facedancer / total_facedancer * 100
+    acc_original = (correct_original / (total_original * 100)) if total_original != 0 else 0
+    acc_ghost = (correct_ghost / total_ghost * 100) if total_ghost != 0 else 0
+    acc_simswap = (correct_simswap / total_simswap * 100) if total_simswap != 0 else 0
+    acc_facedancer = (correct_facedancer / total_facedancer * 100) if total_facedancer != 0 else 0
+
+    # print("acc_original", acc_original)
+    # print("acc_ghost", acc_ghost)
+    # print("acc_simswap", acc_simswap)
+    # print("acc_facedancer", acc_facedancer)
     # -------------------------------------------------------------------- #
-    # balanced accuracy computation
-    balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) #, adjusted = True) 
-    # blanced accuracy -> the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes
-    # adjusted = True -> the balanced accuracy is adjusted for chance -> 0 for random predictions and 1 for perfect predictions
-    # if adjusted = False, the balanced accuracy is the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes. Random score = 0.5 
+    # balanced accuracy
+    balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
+
     # Ensure the directory exists
     output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
     if not os.path.exists(output_dir):
@@ -219,15 +221,13 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     TPR = tp / (tp + fn) # sensitivity, recall -> from all the positive classes, how many were correctly predicted
     # recall should be as high as possible -> we want to avoid false negatives -> max recall = 1
     TNR = tn / (tn + fp) # specificity -> from all the negative classes, how many were correctly predicted. Ideally, we want to avoid false positives -> max specificity = 1
-
-    # -------------------------------------------------------------------- #
-    # balanced acc computation
-    balanced_acc = (TPR + TNR) / 2 # balanced accuracy -> the average of sensitivity and specificity -> the higher the balanced accuracy, the better the model is at distinguishing between classes
-
     # -------------------------------------------------------------------- #
     # auc
     fpr, tpr, _ = metrics.roc_curve(y_true, prediction_class, pos_label=1)
-    auc = metrics.auc(fpr, tpr) # use the general function auc to compute the area under the curve
+    # auc = metrics.auc(fpr, tpr)
+    # check if auc is not NaN, in case set it to 0
+    auc = metrics.auc(fpr, tpr) if not np.isnan(metrics.auc(fpr, tpr)) else 0
+    # auc = metrics.roc_auc_score(y_true, y_pred) if not np.isnan(metrics.roc_auc_score(y_true, y_pred)) else 0
     # -------------------------------------------------------------------- #
     # display the ROC curve
     display_roc = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=auc)
@@ -241,7 +241,8 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
     # -------------------------------------------------------------------- #
     # eer -> Equal Error Rate: the poi nt where fnr = fpr. The lower the EER, the better the model is at distinguishing between classes
     fnr = 1 - tpr
-    eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] # Equal Error Rate is computed as the point where fnr = fpr -> in general the lower the EER, the higher the model's accuracy
+    eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] if not np.isnan(fpr).all() else 0 # np.isnan(fpr).all() -> check if fpr contains only NaN values
+    # eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] # Equal Error Rate is computed as the point where fnr = fpr -> in general the lower the EER, the higher the model's accuracy
     # ap -> Average Precision: the higher the AP, the better the model is at distinguishing between classes.
     ap = metrics.average_precision_score(y_true, y_pred)
     # pos_label: 1 (default) -> the class to report if average='binary' and pos_label is not specified 
@@ -280,27 +281,25 @@ def get_test_metrics(y_pred, y_true, img_names, model, dataset, tags):
 
     # return {'acc': acc, 'auc': auc, 'eer': eer, 'ap': ap, 'pred': y_pred, 'video_auc': v_auc, 'label': y_true}
     return {
-        # metrics
         'acc': acc, # Accuracy
+        'balanced_acc': balanced_acc,
         # Accuracy for each algo: ghost, simswap, facedancer, original
         'test_accuracy_original': acc_original,
         'test_accuracy_simswap': acc_simswap,
         'test_accuracy_ghost': acc_ghost,
         'test_accuracy_facedancer': acc_facedancer,
-        'auc': auc, # Area Under the ROC Curve  
-        # 'video_auc': v_auc, # keep it? 
+        'auc': auc, # Area Under the ROC Curve
         'ap': ap, # Average Precision 
-        'TPR': TPR, # True Positive Rate (Recall)
+        # 'video_auc': v_auc, # keep it? 
+        'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
         'TNR': TNR, # True Negative Rate (Specificity)
-        'balanced_acc': balanced_acc, # Balanced Accuracy
         'eer': eer, # Equal Error Rate 
         # -------------------------------------------------------------------- #
-        # lists and paths of labels, predictions, and images
         # 'precision': precision_scr, # Precision
         # 'recall': list(recall),
-        'pred': list(y_pred), # list of predictionù
-        'label': list(y_true), # list of labels
-        'img_path_collection': img_names # list of image paths
+        # 'pred': list(y_pred), # list of predictionù
+        # 'label': list(y_true), # list of labels
+        # 'img_path_collection': img_names # list of image paths
     }
 
 # ----------------------------------------------------------------------------------------------------------------------------- #

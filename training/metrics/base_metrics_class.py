@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 
 
-def get_accracy(output, label):
+def get_accuracy(output, label):
     _, prediction = torch.max(output, 1)    # argmax
     correct = (prediction == label).sum().item()
     accuracy = correct / prediction.size(0)
@@ -57,7 +57,7 @@ def calculate_metrics_for_train(label, output):
     return auc, eer, accuracy, ap
 
 
-# ------------ compute average metrics of batches---------------------
+# ------------ compute average metrics of batches ------------ #
 class Metrics_batch():
     def __init__(self):
         self.tprs = []
@@ -148,7 +148,7 @@ class Metrics_batch():
         self.losses.clear()
 
 
-# ------------ compute average metrics of all data ---------------------
+# ------------ compute average metrics of all data ------------ #
 class Metrics_all():
     def __init__(self):
         self.probs = []

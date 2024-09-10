@@ -43,6 +43,7 @@ parser = argparse.ArgumentParser(description='Process some paths.')
 parser.add_argument('--detector', type=str, default = 'xception', help='detector name')
 parser.add_argument("--test_dataset", nargs="+") # define the test dataset name in the command line (more than one)
 parser.add_argument('--tags', type=str, default="occlusion", help='tags for the test')
+parser.add_argument('--pretrained', action = "store_true", default=False)
 # parser.add_argument('--weights_path', type=str, 
 #                     default='../dfb_weights/xception_best.pth'
 #                     )
@@ -50,9 +51,9 @@ parser.add_argument('--tags', type=str, default="occlusion", help='tags for the 
 #parser.add_argument("--lmdb", action='store_true', default=False)
 args = parser.parse_args()
 
-# -------------------------------------- #
-# python test.py --detector "xception" --test_dataset "thesis_occ" --tags "Xception_thesis_occ_GEN"
-# -------------------------------------- #
+# --------------------------------------------------------------------------------------------- #
+# python test.py --detector "xception" --test-dataset "no_occlusio" --tags "Xception-no-occ-GEN"
+# --------------------------------------------------------------------------------------------- #
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -115,17 +116,22 @@ def test_one_dataset(model, data_loader):
             data_dict['landmark'] = landmark.to(device)
 
         # model forward without considering gradient computation
-        predictions = inference(model, data_dict) # returns dict of {cls, prob, feat}
-        label_lists += list(data_dict['label'].cpu().detach().numpy()) # get the label values (Ground truth)
-        prediction_lists += list(predictions['prob'].cpu().detach().numpy()) # get the prediction values -> used to compute the predicted labels (if prob > 0.5, then the prediction is 1, else 0)
-        # prob has 2 values, the first one is the probability of being real, the second one is the probability of being fake
-        # in the prediction_lists there is only one value, which is the probability of being fake
-        # how is the prediction value calculated? -> the second value of the prob tensor (output of the classifier)
-        feature_lists += list(predictions['feat'].cpu().detach().numpy()) # get the feature values
+        predictions = inference(model, data_dict)
+        label_lists += list(data_dict['label'].cpu().detach().numpy())
+        prediction_lists += list(predictions['prob'].cpu().detach().numpy())
+        feature_lists += list(predictions['feat'].cpu().detach().numpy())
+
+        # print("predictions", predictions)
+        # print("type(predictions)", type(predictions))
+        # print("label_lists[:10]", label_lists[:10])
+        # print("prediction_lists[:10]", prediction_lists[:10])
+        # print("feature_lists[:10]", feature_lists[:10])
+        
+        # breakpoint()
     
     return np.array(prediction_lists), np.array(label_lists),np.array(feature_lists)
     
-def test_epoch(model, test_data_loaders, logger, model_name, dataset_name, tags):
+def test_epoch(model, test_data_loaders, logger,  tags): # model_name, dataset_name,
     # set model to eval mode
     model.eval()
 
@@ -137,10 +143,10 @@ def test_epoch(model, test_data_loaders, logger, model_name, dataset_name, tags)
     for key in keys:
         data_dict = test_data_loaders[key].dataset.data_dict # get the data dictionary for the current dataset
         # print("data_dict['image']", data_dict['image'][0])
-        print("data dict keys:", data_dict.keys())
-        print("len(data_dict['image'])", len(data_dict['image']))
-        for i in range(10):
-            print(f"data_dict['image'][{i}]: {data_dict['image'][i]}")
+        # print("data dict keys:", data_dict.keys())
+        # print("len(data_dict['image'])", len(data_dict['image']))
+        # for i in range(10):
+        #     print(f"data_dict['image'][{i}]: {data_dict['image'][i]}")
         # compute loss for each dataset
         predictions_nps, label_nps, feat_nps = test_one_dataset(model, test_data_loaders[key])
 
@@ -149,9 +155,12 @@ def test_epoch(model, test_data_loaders, logger, model_name, dataset_name, tags)
 
         
         # compute metric for each dataset
-        metric_one_dataset = get_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], model = model_name, dataset = dataset_name, tags = tags)
+        metric_one_dataset = get_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], tags = tags) # model = model_name, dataset = dataset_name
         metrics_all_datasets[key] = metric_one_dataset
         
+        # log the experiment info
+        logger.info(f"experiment: {tags}") 
+
         # info for each dataset
         tqdm.write(f"dataset: {key}") # print the dataset name 
         logger.info(f"dataset: {key}") # save the info for each dataset to a log file
@@ -169,7 +178,7 @@ def test_epoch(model, test_data_loaders, logger, model_name, dataset_name, tags)
 
 @torch.no_grad()
 def inference(model, data_dict):
-    predictions = model(data_dict, inference=True) # forward pass through the model -> forward function in the model class
+    predictions = model(data_dict, inference=True)
     return predictions
 
 
@@ -205,9 +214,20 @@ def print_model_state_dict(model):
 def main():
 
     if args.detector == 'xception':
-        detector_yaml = './config/detector/xception.yaml'
-        weights_path = './pretrained/xception_best.pth'
+        detector_yaml = './config/detector/xception.yaml'       
         model_name = 'xception'
+        if args.pretrained:
+            # if args.pretrained:
+            weights_path = './logs/training/xception_2024-09-10-17-16-01/test/avg/ckpt_best.pth'
+            print(f"using TL {model_name} model: {weights_path}")
+            # config['pretrained'] = weights_path
+            # print(config['pretrained'])
+        else:
+            weights_path = './pretrained/xception_best.pth'
+            print("using default pretrained model: ", weights_path)
+
+        
+
     elif args.detector == 'ucf':
         detector_yaml = './config/detector/ucf.yaml'
         weights_path = './pretrained/ucf_best.pth'
@@ -228,18 +248,21 @@ def main():
     # since in the rest of the code they use only config, we need to update it with the test config
     config.update(config2) # update the config with the test config info -> missing??
 
+    
+
     if 'label_dict' in config:
         config2['label_dict']=config['label_dict']
 
     # weights_path = None
     # If arguments are provided, they will overwrite the yaml settings
     if args.test_dataset:
-        dataset_name = args.test_dataset[0]
         config['test_dataset'] = args.test_dataset
-        
     else:
-        dataset_name = config['test_dataset'][0]
+        args.test_dataset = config['test_dataset']
     
+    print("dataset:")
+    print(args.test_dataset)
+    print(config['test_dataset'])
     
     # if args.weights_path:
     #     config['weights_path'] = args.weights_path
@@ -255,7 +278,7 @@ def main():
     if args.tags:
         log_path = config['log_dir']+'/'+ args.tags + '/testing/logs/test_output.log'
     else:
-        log_path = config['log_dir'] + '/' + model_name + '/dfb_' + dataset_name + '/test_output.log'
+        log_path = config['log_dir'] + '/' + model_name + '/dfb_' + args.test_dataset + '/test_output.log'
 
     if not os.path.exists(log_path):
         os.makedirs(os.path.dirname(log_path), exist_ok=True) # create the directory if it does not exist
@@ -280,6 +303,7 @@ def main():
     # model = ModifiedModel(model, 2).to(device)
     
     # print(model)
+    # breakpoint()
     # print_model_state_dict(model)
 
     epoch = 0
@@ -328,7 +352,7 @@ def main():
     # exit()
 
     # start testing
-    best_metric = test_epoch(model, test_data_loaders, logger, model_name, dataset_name, args.tags)
+    best_metric = test_epoch(model, test_data_loaders, logger, args.tags) # model_namedataset_name, args.tags)
     print('===> Test Done!')
 
 if __name__ == '__main__':
