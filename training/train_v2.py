@@ -45,20 +45,18 @@ from torch.utils.data import Dataset, Subset
 class CustomSubset(Subset):
     def __init__(self, dataset, indices):
         super().__init__(dataset, indices)
-        # extract only a subset of the dataset with the given indices
-        # self.dataset = dataset
         self.dataset = dataset
-        # self.indices = indices
+        self.indices = indices
+        self.data_dict = dataset.data_dict  # Retain the data_dict attribute
 
-    # def __getitem__(self, idx):
-    #     return self.dataset[self.indices[idx]]  # Return the item at the given index in the subset
+    def __getitem__(self, idx):
+        return self.dataset[self.indices[idx]]  # Return the item at the given index in the subset
     
-    # def __len__(self):
-    #     # return len(self.indices)
-    #     return len(self.dataset) # Return the length of the subset
+    def __len__(self):
+        return len(self.indices)  # Return the length of the subset
 
     def __getattr__(self, name):
-        return getattr(self.dataset, name) # Delegate attribute access to the original dataset
+        return getattr(self.dataset, name)  # Delegate attribute access to the original dataset
 # ---------------------------------------- #
 
 parser = argparse.ArgumentParser(description='Process some paths.')
@@ -158,26 +156,6 @@ def prepare_training_data(config):
                 collate_fn=train_set.collate_fn,
                 )
     return train_data_loader
-
-# def prepare_train_dataloader(config):
-#     # Use the custom Subset class
-#     # trn_indices = list(range(trn_size))
-#     # val_indices = list(range(trn_size, len(train_dataset))) # 9600, 12000
-#     train_set = DeepfakeAbstractBaseDataset(
-#                     config=config,
-#                     mode='train',
-#                     # indicies= trn_indices
-#                 )
-    
-#     train_data_loader = torch.utils.data.DataLoader(
-#         dataset=train_set,
-#         batch_size=config['train_batchSize'],
-#         shuffle=True,
-#         num_workers=int(config['workers']),
-#         collate_fn=train_set.collate_fn,
-#         drop_last = True, # drop the last batch if it is not full
-#     )
-#     return train_data_loader
 
 
 def prepare_testing_data(config):
@@ -365,10 +343,10 @@ def main():
     # print("test_dataset", args.test_dataset)
     # breakpoint()
 
-    print("metric scoring: ", config['metric_scoring'])
-    print("using accuracy (acc) as metric scoring")
-    config['metric_scoring'] = 'acc'
-    print("metric scoring: ", config['metric_scoring'])
+    # print("metric scoring: ", config['metric_scoring'])
+    # print("using accuracy (acc) as metric scoring")
+    # config['metric_scoring'] = 'acc'
+    # print("metric scoring: ", config['metric_scoring'])
 
     config['save_ckpt'] = args.save_ckpt
     config['save_feat'] = args.save_feat
@@ -392,7 +370,7 @@ def main():
     # logger = create_logger(log_path)
 
 
-    timenow=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    # timenow=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
     # task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" 
     # logger_path =  os.path.join(
@@ -405,18 +383,22 @@ def main():
     # logger.info('Save log to {}'.format(logger_path))
 
     print("log_dir: ", config['log_dir'])
-    breakpoint()
+    # breakpoint()
 
     # create logger for saving testing results
     if args.tags:
-        log_path = config['log_dir']+'/'+ args.tags + '/training/logs/test_output.log'
+        log_path = config['log_dir']+'/'+ args.tags + '/training/logs/training.log'
     else:
-        log_path = config['log_dir'] + '/' + model_name + '/dfb_' + args.test_dataset + '/test_output.log'
+        log_path = config['log_dir'] + '/' + model_name + '/dfb_' + args.test_dataset + '/training.log'
 
     if not os.path.exists(log_path):
         os.makedirs(os.path.dirname(log_path), exist_ok=True) # create the directory if it does not exist
     logger = create_logger(log_path)
+    logger.info('Experiment {}'.format(args.tags))
     logger.info('Save log to {}'.format(log_path))
+    
+    print("Save log to: ", log_path)
+    # breakpoint()
 
     config['ddp']= args.ddp
     print("ddp: ", config['ddp'])
@@ -430,6 +412,7 @@ def main():
 
     # init seed
     init_seed(config)
+    generator = torch.Generator().manual_seed(config['manualSeed'])
 
     # set cudnn benchmark if needed
     if config['cudnn']:
@@ -477,39 +460,45 @@ def main():
     # print(f"Training dataset size: {trn_size}") # 9600
     # print(f"Validation dataset size: {val_size}") # 2400
 
-    # trn_dataset, val_dataset = torch.utils.data.random_split(train_dataset, [trn_size, val_size])
+    trn_dataset, vld_dataset = torch.utils.data.random_split(train_dataset, [trn_size, val_size], generator)
     # return two datasets: trn_dataset and val_dataset
-    # print(f"Training dataset size: {len(trn_dataset)}")
-    # print(f"Validation dataset size: {len(val_dataset)}")
-    # breakpoint()
+    print(f"Training dataset size: {len(trn_dataset)}") # 9600
+    print(f"Validation dataset size: {len(vld_dataset)}") # 2400
+    print("type(trn_dataset)", type(trn_dataset))
+    print("type(vld_dataset)", type(vld_dataset))
+    # type(trn_dataset) <class 'torch.utils.data.dataset.Subset'>
+    # type(vld_dataset) <class 'torch.utils.data.dataset.Subset'>
+    breakpoint()
 
     # Use the custom Subset class
-    trn_indices = list(range(trn_size))
-    val_indices = list(range(trn_size, len(train_dataset))) # 9600, 12000
+    # trn_indices = list(range(trn_size))
+    # val_indices = list(range(trn_size, len(train_dataset))) # 9600, 12000
 
     trn_dataset = DeepfakeAbstractBaseDataset(
                     config=config,
                     mode='train',
-                    indicies=trn_indices
+                    # indicies=trn_indices
+                    indicies=trn_dataset.indices
                 )
 
     vld_dataset = DeepfakeAbstractBaseDataset(
                     config=config,
                     mode='train',
-                    indicies=val_indices,
+                    # indicies=val_indices,
+                    indicies= vld_dataset.indices
                     # val = True
                 )
 
 
-    print("len(trn_dataset)", len(trn_dataset)) # 9600
-    print("len(vld_dataset)", len(vld_dataset)) # 2400
+    # print("len(trn_dataset)", len(trn_dataset)) # 9600
+    # print("len(vld_dataset)", len(vld_dataset)) # 2400
     # breakpoint()
 
-    # train_dataset = CustomSubset(train_dataset, trn_indices)
-    # val_dataset = CustomSubset(val_dataset, val_indices)
+    # train_dataset = CustomSubset(train_dataset) #, trn_indices)
+    # val_dataset = CustomSubset(vld_dataset) #, val_indices)
 
-    # train_subset = CustomSubset(train_dataset, trn_indices)
-    # val_subset = CustomSubset(train_dataset, val_indices)
+    # train_subset = CustomSubset(train_dataset, trn_dataset.indices)
+    # val_subset = CustomSubset(train_dataset, vld_dataset.indices)
 
     # print(f"Training dataset size: {len(train_subset)}")
     # print(f"Validation dataset size: {len(val_subset)}")
@@ -554,22 +543,21 @@ def main():
     test_name = config['train_dataset'][0]
     # print("test_name:", test_name)
     val_data_loaders[test_name] = val_data_loader 
-    # val = True # using validation dataset in model training
     # print(val_data_loader.keys())
 
     # ---------------------------------------- #
     # # check data dict length
-    # trn_data_dict = train_data_loader.dataset.data_dict['image']
-    # print("len(trn_data_dict['image']): ", len(trn_data_dict)) # 9600
-    # val_data_dict = val_data_loaders[test_name].dataset.data_dict['image']
-    # print("len(val_data_dict['image']): ", len(val_data_dict)) # 2400
+    trn_data_dict = train_data_loader.dataset.data_dict['image']
+    print("len(trn_data_dict['image']): ", len(trn_data_dict)) # 9600
+    val_data_dict = val_data_loaders[test_name].dataset.data_dict['image']
+    print("len(val_data_dict['image']): ", len(val_data_dict)) # 2400
 
-    # trn_data_dict = train_data_loader.dataset.data_dict['label']
-    # print("len(trn_data_dict['label']): ", len(trn_data_dict)) # 9600
-    # val_data_dict = val_data_loaders[test_name].dataset.data_dict['label']
-    # print("len(val_data_dict['label']): ", len(val_data_dict)) # 2400
+    trn_data_dict = train_data_loader.dataset.data_dict['label']
+    print("len(trn_data_dict['label']): ", len(trn_data_dict)) # 9600
+    val_data_dict = val_data_loaders[test_name].dataset.data_dict['label']
+    print("len(val_data_dict['label']): ", len(val_data_dict)) # 2400
 
-    # breakpoint()
+    breakpoint()
     
     # print("trn_data_dict['image']:", trn_data_dict)
     # print("val_data_dict['image']:", val_data_dict)
@@ -593,7 +581,7 @@ def main():
     metric_scoring = choose_metric(config)
 
     # prepare the trainer
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags) # val = True -> using validation dataset
+    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags) 
 
     # start training
     print("Start training...")
