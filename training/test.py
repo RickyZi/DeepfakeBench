@@ -27,10 +27,10 @@ from dataset.ff_blend import FFBlendDataset
 from dataset.fwa_blend import FWABlendDataset
 from dataset.pair_dataset import pairDataset
 
-from trainer.trainer import Trainer
+# from trainer.trainer import Trainer
 from detectors import DETECTOR
-from metrics.base_metrics_class import Recorder #RecorderFc
-from collections import defaultdict
+# from metrics.base_metrics_class import Recorder #RecorderFc
+# from collections import defaultdict
 
 import argparse
 from logger import create_logger

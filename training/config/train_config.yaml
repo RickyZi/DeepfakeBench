@@ -7,8 +7,8 @@ rgb_dir: './datasets/rgb' # path to the directory containing the RGB frames
 lmdb_dir:  './datasets/lmdb' # path to the directory containing the lmdb files
 dataset_json_folder: '../preprocessing/dataset_json'
 SWA: False
-save_avg: True
-log_dir: ./logs/training/
+save_avg: True # save the average model 
+log_dir: /home/rz/DeepfakeBench/training/results/ # ./logs/training/
 # label settings
 label_dict:
   # # DFD

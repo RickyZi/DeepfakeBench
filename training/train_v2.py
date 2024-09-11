@@ -394,15 +394,29 @@ def main():
 
     timenow=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-    task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" 
-    logger_path =  os.path.join(
-                config['log_dir'],
-                # config['model_name'] + task_str + '_' + timenow
-                args.tags + task_str + '_' + timenow
-            )
-    os.makedirs(logger_path, exist_ok=True)
-    logger = create_logger(os.path.join(logger_path, 'training.log'))
-    logger.info('Save log to {}'.format(logger_path))
+    # task_str = f"_{config['task_target']}" if config['task_target'] is not None else "" 
+    # logger_path =  os.path.join(
+    #             config['log_dir'],
+    #             # config['model_name'] + task_str + '_' + timenow
+    #             args.tags + task_str + '_' + timenow
+    #         )
+    # os.makedirs(logger_path, exist_ok=True)
+    # logger = create_logger(os.path.join(logger_path, 'training.log'))
+    # logger.info('Save log to {}'.format(logger_path))
+
+    print("log_dir: ", config['log_dir'])
+    breakpoint()
+
+    # create logger for saving testing results
+    if args.tags:
+        log_path = config['log_dir']+'/'+ args.tags + '/training/logs/test_output.log'
+    else:
+        log_path = config['log_dir'] + '/' + model_name + '/dfb_' + args.test_dataset + '/test_output.log'
+
+    if not os.path.exists(log_path):
+        os.makedirs(os.path.dirname(log_path), exist_ok=True) # create the directory if it does not exist
+    logger = create_logger(log_path)
+    logger.info('Save log to {}'.format(log_path))
 
     config['ddp']= args.ddp
     print("ddp: ", config['ddp'])
@@ -540,6 +554,7 @@ def main():
     test_name = config['train_dataset'][0]
     # print("test_name:", test_name)
     val_data_loaders[test_name] = val_data_loader 
+    # val = True # using validation dataset in model training
     # print(val_data_loader.keys())
 
     # ---------------------------------------- #
@@ -578,7 +593,7 @@ def main():
     metric_scoring = choose_metric(config)
 
     # prepare the trainer
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring)
+    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags) # val = True -> using validation dataset
 
     # start training
     print("Start training...")

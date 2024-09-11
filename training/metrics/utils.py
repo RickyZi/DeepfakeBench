@@ -31,6 +31,156 @@ def parse_metric_for_print(metric_dict):
     return str
 
 
+def get_vld_metrics(y_pred, y_true, img_names): # model, dataset, 
+    # keep track of the number of correct predictions for each class
+    correct_original, correct_simswap, correct_ghost, correct_facedancer = 0, 0, 0, 0
+    total_original, total_simswap, total_ghost, total_facedancer = 0, 0, 0, 0 
+    # -------------------------------------------------------------------- #
+    # y_pred = predicted scores (probabilities)
+    # y_true = true binary labels (ground truth, 0 or 1)
+    # prediction_class = predicted class labels (0 or 1)
+    # -------------------------------------------------------------------- #
+    y_pred = y_pred.squeeze() # remove the extra dimension (batch_size, 1) -> (batch_size, )
+    # For UCF, where labels for different manipulations are not consistent.
+    y_true[y_true >= 1] = 1
+
+    # print("len(y_true)", len(y_true)) # 2400 -> # test images
+    # print("len(y_pred)", len(y_pred)) # 2400 -> # test images
+    # print("len(img_names)", len(img_names)) # 2400 -> # test images
+    # breakpoint()
+    # -------------------------------------------------------------------- #
+    # acc
+    prediction_class = (y_pred > 0.5).astype(int) # convert prediction to class labels 
+    # print("len(prediction_class)", len(prediction_class)) # 2400
+    # -------------------------------------------------------------------- #
+    correct = (prediction_class == np.clip(y_true, a_min=0, a_max=1)).sum().item() 
+    # correct: number of correct predictions -> sum of correct predictions
+    # np.clip(y_true, a_min=0, a_max=1): clip the values in the array to be between 0 and 1
+    acc = correct / len(prediction_class) * 100
+
+    # -------------------------------------------------------------------- #
+    # compute accuracy for each algo: ghost, simswap, facedancer, original
+    # print("type(image_names)", type(img_names)) # tuple
+    # print("len(image_names)", len(img_names)) # 2
+    # print("img_names[0]", img_names[0]) # label
+    # print("img_names[1]", img_names[1]) # imgs_path
+    # breakpoint() 
+
+    for i in range(len(img_names)):
+        if 'original' in img_names[i]:
+            total_original += 1
+            if prediction_class[i] == y_true[i]:
+                correct_original += 1
+        elif 'simswap' in img_names[i]:
+            total_simswap += 1
+            if prediction_class[i] == y_true[i]:
+                correct_simswap += 1
+        elif 'ghost' in img_names[i]:
+            total_ghost += 1
+            if prediction_class[i] == y_true[i]:
+                correct_ghost += 1
+        elif 'facedancer' in img_names[i]:
+            total_facedancer += 1
+            if prediction_class[i] == y_true[i]:
+                correct_facedancer += 1
+
+    acc_original = (correct_original / (total_original * 100)) if total_original != 0 else 0
+    acc_ghost = (correct_ghost / total_ghost * 100) if total_ghost != 0 else 0
+    acc_simswap = (correct_simswap / total_simswap * 100) if total_simswap != 0 else 0
+    acc_facedancer = (correct_facedancer / total_facedancer * 100) if total_facedancer != 0 else 0
+
+    # print("acc_original", acc_original)
+    # print("acc_ghost", acc_ghost)
+    # print("acc_simswap", acc_simswap)
+    # print("acc_facedancer", acc_facedancer)
+    # -------------------------------------------------------------------- #
+    # balanced accuracy
+    # balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
+
+    # # Ensure the directory exists
+    # output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
+    # if not os.path.exists(output_dir):
+    #     os.makedirs(output_dir)
+    # # -------------------------------------------------------------------- #
+    # # convert to numpy array (tensor -> numpy array), then give it to roc_curve
+    # # labels_list = y_true.cpu().numpy() # convert to numpy array -> true binary labels (ground truth, 0 or 1)
+    # # pred_list = y_pred.cpu().numpy() # convert to numpy array -> predicted scores (probabilities)
+    # # pred_list = torch.cat(y_pred, dim=0).cpu().numpy() 
+    # # compute the confusion matrix, save it as a figure
+    # cm = metrics.confusion_matrix(y_true, prediction_class)
+    # # cm = confusion_matrix(labels_list, pred_list)
+    # tn, fp, fn, tp = cm.ravel()
+    # cm_display = metrics.ConfusionMatrixDisplay(cm).plot()
+    # cm_path = check_graph_name(os.path.join(output_dir, 'confusion_matrix.png'))
+    # cm_display.figure_.savefig(cm_path)
+    # # confusion matrix tells us how many true positives, true negatives, false positives, and false negatives we have
+
+    # # compute TPR and TNR
+    # TPR = tp / (tp + fn) # sensitivity, recall -> from all the positive classes, how many were correctly predicted
+    # # recall should be as high as possible -> we want to avoid false negatives -> max recall = 1
+    # TNR = tn / (tn + fp) # specificity -> from all the negative classes, how many were correctly predicted. Ideally, we want to avoid false positives -> max specificity = 1
+    # # -------------------------------------------------------------------- #
+    # # auc
+    # fpr, tpr, _ = metrics.roc_curve(y_true, prediction_class, pos_label=1)
+    # # auc = metrics.auc(fpr, tpr)
+    # # check if auc is not NaN, in case set it to 0
+    # auc = metrics.auc(fpr, tpr) if not np.isnan(metrics.auc(fpr, tpr)) else 0
+    # # auc = metrics.roc_auc_score(y_true, y_pred) if not np.isnan(metrics.roc_auc_score(y_true, y_pred)) else 0
+    # # -------------------------------------------------------------------- #
+    # # display the ROC curve
+    # display_roc = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=auc)
+    # display_roc.plot()
+    # roc_path = check_graph_name(os.path.join(output_dir, 'roc_curve.png'))
+    # display_roc.figure_.savefig(roc_path)
+    # # ROC-AUC curve tells how much the model is capable of distinguishing between classes
+    # # the higher the AUC, the better the model is at predicting 0s as 0s and 1s as 1s
+    # # AUC = 1 -> perfect model, AUC = 0.5 -> random model
+    # # ROC curve is a plot of TPR vs FPR at different classification thresholds
+    # # -------------------------------------------------------------------- #
+    # # eer -> Equal Error Rate: the poi nt where fnr = fpr. The lower the EER, the better the model is at distinguishing between classes
+    # fnr = 1 - tpr
+    # eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] if not np.isnan(fpr).all() else 0 # np.isnan(fpr).all() -> check if fpr contains only NaN values
+    # # eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] # Equal Error Rate is computed as the point where fnr = fpr -> in general the lower the EER, the higher the model's accuracy
+    # # ap -> Average Precision: the higher the AP, the better the model is at distinguishing between classes.
+    # ap = metrics.average_precision_score(y_true, y_pred)
+    # # pos_label: 1 (default) -> the class to report if average='binary' and pos_label is not specified 
+    # # in our case, pos_label = 0 (real) and neg_label = 1 (fake) -> but we are interested in the ability of the model in detecting fake images -> so we set pos_label = 1 
+
+    # # -------------------------------------------------------------------- #
+    # # compute precision and recall
+    # # y_pred_binary = (y_pred > 0.5).astype(int) # convert prediction to binary labels
+    # precision, recall, _ = metrics.precision_recall_curve(y_true, y_pred)
+    # # compute the precision-recall curve and save it as a figure
+    # display_pr = metrics.PrecisionRecallDisplay(precision=precision, recall=recall, average_precision=ap)
+    # display_pr.plot()
+    # pr_path = check_graph_name(os.path.join(output_dir, 'pr_curve.png'))
+    # display_pr.figure_.savefig(pr_path)
+    
+    
+    return {
+        'acc': acc, # Accuracy
+        # 'balanced_acc': balanced_acc,
+        # Accuracy for each algo: ghost, simswap, facedancer, original
+        'test_accuracy_original': acc_original,
+        'test_accuracy_simswap': acc_simswap,
+        'test_accuracy_ghost': acc_ghost,
+        'test_accuracy_facedancer': acc_facedancer,
+        # -------------------------------------------------------------------- #
+        # 'auc': auc, # Area Under the ROC Curve
+        # 'ap': ap, # Average Precision 
+        # # 'video_auc': v_auc, # keep it? 
+        # 'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
+        # 'TNR': TNR, # True Negative Rate (Specificity)
+        # 'eer': eer, # Equal Error Rate 
+        # -------------------------------------------------------------------- #
+        # 'precision': precision_scr, # Precision
+        # 'recall': list(recall),
+        # 'pred': list(y_pred), # list of predictionù
+        # 'label': list(y_true), # list of labels
+        # 'img_path_collection': img_names # list of image paths
+    }
+
+
 def check_graph_name(graph_path):
     # check if the graph_name already exists, 
     # if it does, add a number to the end of the graph_name
@@ -52,7 +202,7 @@ def check_graph_name(graph_path):
             i += 1
     return graph_path
 
-def get_test_metrics(y_pred, y_true, img_names, tags=''): # model, dataset, 
+def get_test_metrics(y_pred, y_true, img_names, tags='', val = False): # model, dataset, 
     # compute video-level auc for the frame-level methods.
     # img_names: list of image paths (list of tuples)
     def get_video_metrics(image, pred, label):
@@ -200,9 +350,12 @@ def get_test_metrics(y_pred, y_true, img_names, tags=''): # model, dataset,
     balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
 
     # Ensure the directory exists
-    output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+    if not val: 
+        output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+    else: 
+        output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/training/graphs/'
     # -------------------------------------------------------------------- #
     # convert to numpy array (tensor -> numpy array), then give it to roc_curve
     # labels_list = y_true.cpu().numpy() # convert to numpy array -> true binary labels (ground truth, 0 or 1)
@@ -280,27 +433,50 @@ def get_test_metrics(y_pred, y_true, img_names, tags=''): # model, dataset,
     #     v_auc=auc
 
     # return {'acc': acc, 'auc': auc, 'eer': eer, 'ap': ap, 'pred': y_pred, 'video_auc': v_auc, 'label': y_true}
-    return {
-        'acc': acc, # Accuracy
-        'balanced_acc': balanced_acc,
-        # Accuracy for each algo: ghost, simswap, facedancer, original
-        'test_accuracy_original': acc_original,
-        'test_accuracy_simswap': acc_simswap,
-        'test_accuracy_ghost': acc_ghost,
-        'test_accuracy_facedancer': acc_facedancer,
-        'auc': auc, # Area Under the ROC Curve
-        'ap': ap, # Average Precision 
-        # 'video_auc': v_auc, # keep it? 
-        'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
-        'TNR': TNR, # True Negative Rate (Specificity)
-        'eer': eer, # Equal Error Rate 
-        # -------------------------------------------------------------------- #
-        # 'precision': precision_scr, # Precision
-        # 'recall': list(recall),
-        # 'pred': list(y_pred), # list of predictionù
-        # 'label': list(y_true), # list of labels
-        # 'img_path_collection': img_names # list of image paths
-    }
+    if val: 
+        return {
+            'acc': acc, # Accuracy
+            'balanced_acc': balanced_acc,
+            # Accuracy for each algo: ghost, simswap, facedancer, original
+            'test_accuracy_original': acc_original,
+            'test_accuracy_simswap': acc_simswap,
+            'test_accuracy_ghost': acc_ghost,
+            'test_accuracy_facedancer': acc_facedancer,
+            'auc': auc, # Area Under the ROC Curve
+            'ap': ap, # Average Precision 
+            # 'video_auc': v_auc, # keep it? 
+            'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
+            'TNR': TNR, # True Negative Rate (Specificity)
+            'eer': eer, # Equal Error Rate 
+            # -------------------------------------------------------------------- #
+            # 'precision': precision_scr, # Precision
+            # 'recall': list(recall),
+            # 'pred': list(y_pred), # list of predictionù
+            # 'label': list(y_true), # list of labels
+            # 'img_path_collection': img_names # list of image paths
+        }
+    else:
+        return {
+            'acc': acc, # Accuracy
+            'balanced_acc': balanced_acc,
+            # Accuracy for each algo: ghost, simswap, facedancer, original
+            'test_accuracy_original': acc_original,
+            'test_accuracy_simswap': acc_simswap,
+            'test_accuracy_ghost': acc_ghost,
+            'test_accuracy_facedancer': acc_facedancer,
+            'auc': auc, # Area Under the ROC Curve
+            'ap': ap, # Average Precision 
+            # 'video_auc': v_auc, # keep it? 
+            'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
+            'TNR': TNR, # True Negative Rate (Specificity)
+            'eer': eer, # Equal Error Rate 
+            # -------------------------------------------------------------------- #
+            # 'precision': precision_scr, # Precision
+            # 'recall': list(recall),
+            'pred': list(y_pred), # list of predictionù
+            'label': list(y_true), # list of labels
+            'img_path_collection': img_names # list of image paths
+        }
 
 # ----------------------------------------------------------------------------------------------------------------------------- #
 # TODO: 

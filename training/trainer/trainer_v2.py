@@ -29,7 +29,7 @@ from torch.optim.swa_utils import AveragedModel, SWALR
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from sklearn import metrics
-from metrics.utils import get_test_metrics
+from metrics.utils import get_test_metrics, get_vld_metrics
 
 FFpp_pool=['FaceForensics++','FF-DF','FF-F2F','FF-FS','FF-NT']#
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -44,9 +44,10 @@ class Trainer(object):
         scheduler,
         logger,
         metric_scoring='auc',
+        tags ="",
+        # val = False,
         time_now = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
-        swa_model=None,
-        tags =""
+        swa_model=None
         ):
         # check if all the necessary components are implemented
         if config is None or model is None or optimizer is None or logger is None:
@@ -64,6 +65,7 @@ class Trainer(object):
         print("metric scoring:", self.metric_scoring) # auc
 
         self.tags = tags # tags for logging
+        # self.val = val # whether the model is in validation mode
         # maintain the best metric of all epochs
         self.best_metrics_all_time = defaultdict(
             lambda: defaultdict(lambda: float('-inf')
@@ -75,19 +77,39 @@ class Trainer(object):
 
         # get current time
         self.timenow = time_now
+        print("log_dir: ", self.config['log_dir']) # log_dir:  logs
+        breakpoint()
         # create directory path
         if 'task_target' not in config:
+            print("task_target not in config")
             self.log_dir = os.path.join(
                 self.config['log_dir'],
-                self.config['model_name'] + '_' + self.timenow
+                self.tags,
+                f"{self.config['model_name']}_{self.timenow}"
             )
+            # self.log_dir = self.config['log_dir'] + '/' + self.tags + '/' + self.config['model_name'] + '_' + self.timenow + '/'
         else:
+            print("task_taget in config")
             task_str = f"_{config['task_target']}" if config['task_target'] is not None else ""
-            self.log_dir = os.path.join(
-                self.config['log_dir'],
-                self.config['model_name'] + task_str + '_' + self.timenow
-            )
+            if task_str == "":
+                self.log_dir = os.path.join(
+                    self.config['log_dir'],
+                    self.tags,
+                    f"{self.config['model_name']}_{self.timenow}"
+                )
+            else:
+                self.log_dir = os.path.join(
+                    self.config['log_dir'],
+                    self.tags,
+                    f"{self.config['model_name']}_{task_str} _{self.timenow}"
+                )
+                # self.log_dir = self.config['log_dir'] + '/' + self.tags + '/' + self.config['model_name'] + '_' + self.timenow + '/'
+            
+            # self.log_dir = self.config['log_dir'] + '/' + self.tags + '/' + self.config['model_name'] + '_' + task_str+ '_'+ self.timenow + '/'
         os.makedirs(self.log_dir, exist_ok=True)
+        print("log_dir: ", self.log_dir) # log_dir:  log_dir:  /home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2023-03-30-10-00-00
+
+        breakpoint()
 
     def get_writer(self, phase, dataset_key, metric_key): # get tensorboard writer
         writer_key = f"{phase}-{dataset_key}-{metric_key}"
@@ -468,7 +490,7 @@ class Trainer(object):
             # writer.add_scalar(f'test_metrics/acc_fake', acc_fake, global_step=step)
         self.logger.info(metric_str)
 
-    def test_epoch(self, epoch, iteration, test_data_loaders, step):
+    def test_epoch(self, epoch, iteration, test_data_loaders, step): # test for each epoch -> using the best ckpt on the validation set!
         # set model to eval mode
         self.setEval()
 
@@ -496,7 +518,8 @@ class Trainer(object):
             losses_one_dataset_recorder, predictions_nps, label_nps, feature_nps = self.test_one_dataset(test_data_loaders[key])
             # print(f'stack len:{predictions_nps.shape};{label_nps.shape};{len(data_dict["image"])}')
             losses_all_datasets[key] = losses_one_dataset_recorder
-            metric_one_dataset = get_test_metrics(y_pred=predictions_nps,y_true=label_nps,img_names=data_dict['image'], tags = self.tags)
+            # metric_one_dataset = get_test_metrics(y_pred=predictions_nps,y_true=label_nps,img_names=data_dict['image'], tags = self.tags, val = self.val)
+            metric_one_dataset = get_vld_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'])
             print("metric_one_dataset: ", metric_one_dataset)
             # get_test_metrics() missin 3 required positional arugments: 'model', 'dataset', and 'tags'
             for metric_name, value in metric_one_dataset.items():
