@@ -582,7 +582,7 @@ def main():
 
     # start training
     print("Start training...")
-    for epoch in range(config['start_epoch'], config['nEpochs'] + 1): # range(0, 10) -> 0, 1, 2, ..., 9 (10 is not included)
+    for epoch in range(config['start_epoch'], config['nEpochs']): # + 1): # range(0, 10) -> 0, 1, 2, ..., 9 (10 is not included)
         trainer.model.epoch = epoch
         best_metric = trainer.train_epoch(
                     epoch=epoch,
