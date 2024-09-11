@@ -44,7 +44,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
     """
     Abstract base class for all deepfake datasets.
     """
-    def __init__(self, config=None, mode='train', indicies = None): #, val = False):
+    def __init__(self, config=None, mode='train', indicies = None, gotcha = False): #, val = False):
         """Initializes the dataset object.
 
         Args:
@@ -61,7 +61,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         # print("self.mode", mode)
         self.indicies = indicies
         # self.val = val
-
+        self.gotcha = gotcha
         # print(type(self.config['train_dataset']))
         # print(type(self.config['test_dataset']))
         # breakpoint()
@@ -147,7 +147,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             'label': self.label_list, 
         }
         
-        self.transform = self.init_data_aug_method()
+        self.transform = self.init_data_aug_method(self.gotcha)
         
     def init_data_aug_method(self, gotcha=False):
 
