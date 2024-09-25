@@ -503,39 +503,15 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
 
                 dataset_dict[dataset_name][label][data_split][vid_name]['frames'].append(file_path)
 
-                # # if data_split == 'training':
-                # #         data_split = 'train'
-                # # else: 
-                # #         data_split = 'test'
-                # # if data_split not in dataset_dict[dataset_name][label]:
-                # #     # print("data_split: ", data_split)
-                # #     dataset_dict[dataset_name][label][data_split] = {}
-                
-                # if user_id not in dataset_dict[dataset_name][label]:
-                #     dataset_dict[dataset_name][label][user_id] = {}
-
-                # if algorithm not in dataset_dict[dataset_name][label][user_id]:
-                #     # print("algorithm: ", algorithm)
-                #     dataset_dict[dataset_name][label][user_id][algorithm] = {}
-
-                # if challenge not in dataset_dict[dataset_name][label][user_id][algorithm]:
-                #     dataset_dict[dataset_name][label][user_id][algorithm][challenge] = {
-                #         'label': 'real' if 'original' in algorithm else 'fake',
-                #         'frames': []
-                #     }
-                # # print("label: ", label)
-                # print("user_id: ", user_id)
-                # print("algorithm: ", algorithm)
-                # print("challenge: ", challenge)
-                # print("label: ", dataset_dict[dataset_name][label][user_id][algorithm][challenge]['label'])
-                # dataset_dict[dataset_name][label][user_id][algorithm][challenge]['frames'].append(file_path)  
-                
-                # breakpoint()
     # --------------------------------------------------- #
     # ------------------- Test GOTCHA ------------------- #
     # --------------------------------------------------- #
-    elif dataset_name == 'gotcha_occ' or dataset_name == 'gotcha_no_occ':
+    elif dataset_name == 'gotcha_occlusion' or dataset_name == 'gotcha_no_occlusion':
         # reorganize the GOTCHA dataset
+        # subset_name = dataset_name.split('_')[-1] if len(dataset_name.split('_')) > 1 else ''
+        subset_name = 'occlusion' if 'occlusion' in dataset_name else 'no_occlusion'
+        print(subset_name)
+
         dataset_path = os.path.join(dataset_root_path, dataset_name)
         dataset_dict[dataset_name] = {'gotcha_real': {},
                                 'gotcha_fake': {}}

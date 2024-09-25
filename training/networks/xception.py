@@ -170,8 +170,8 @@ class Xception(nn.Module):
         if self.mode == 'adjust_channel_iid':
             final_channel = 512
             self.mode = 'adjust_channel'
-        self.last_linear = nn.Linear(final_channel, self.num_classes) 
-        # last_linear is the classifier layer -> output 2 classes (real/fake)
+        self.last_linear = nn.Linear(final_channel, self.num_classes) # last_linear is the classifier layer -> output 2 classes (real/fake)
+        
         if dropout:
             self.last_linear = nn.Sequential(
                 nn.Dropout(p=dropout),

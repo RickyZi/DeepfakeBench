@@ -51,16 +51,38 @@ logger = logging.getLogger(__name__)
 
 @DETECTOR.register_module(module_name='ucf')
 class UCFDetector(AbstractDetector):
-    def __init__(self, config):
+    # -------------------------------------------------------------------------------------- #
+    # TODO: 
+    # modify the code to perform TL on the UCF model
+    # in particlar, only the last layer of the model should be trained on the new dataset
+    # the rest of the model should be frozen
+
+    # HINT: 
+    # You can use the following code to freeze the layers of the model:
+    # for param in self.encoder_f.parameters():
+    #     param.requires_grad = False
+
+    # You can use the following code to unfreeze the layers of the model:
+    # for param in self.encoder_f.parameters():
+    #    param.requires_grad = True
+
+    # You can use the following code to get the parameters of the model:
+    # for name, param in self.named_parameters():
+    #     print(name, param.requires_grad)
+
+
+    # -------------------------------------------------------------------------------------- #
+
+    def __init__(self, config, tl = False):
         super().__init__()
         self.config = config
-        self.num_classes = config['backbone_config']['num_classes'] # 2 classes
-        self.encoder_feat_dim = config['encoder_feat_dim'] # default: 512
-        self.half_fingerprint_dim = self.encoder_feat_dim//2 # default: 256
+        self.tl = tl
+        self.num_classes = config['backbone_config']['num_classes']
+        self.encoder_feat_dim = config['encoder_feat_dim']
+        self.half_fingerprint_dim = self.encoder_feat_dim//2
 
-        # prepare the backbone
-        self.encoder_f = self.build_backbone(config) # forgery
-        self.encoder_c = self.build_backbone(config) # content
+        self.encoder_f = self.build_backbone(config) # fingerprint_encoder
+        self.encoder_c = self.build_backbone(config) # content_encoder
 
         self.loss_func = self.build_loss(config)
         self.prob, self.label = [], []
@@ -97,6 +119,10 @@ class UCFDetector(AbstractDetector):
             out_f=self.half_fingerprint_dim
         )
         
+        if self.tl:
+            print("Freezing the backbone weights")
+            self.freeze_backbone()
+
     def build_backbone(self, config):
         # prepare the backbone
         backbone_class = BACKBONE[config['backbone_name']]
@@ -107,11 +133,55 @@ class UCFDetector(AbstractDetector):
         for name, weights in state_dict.items():
             if 'pointwise' in name:
                 state_dict[name] = weights.unsqueeze(-1).unsqueeze(-1)
-        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove the fc layer weights in the pretrained model
-        backbone.load_state_dict(state_dict, False)
+        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove the fc layer
+        backbone.load_state_dict(state_dict, False) # load the pretrained weights with 
         logger.info('Load pretrained model successfully!')
         return backbone
     
+    # ------------------------------------------------------------------ #
+    def freeze_backbone(self):
+        # Freeze all layers except the classifier
+        for param in self.encoder_f.parameters():
+            param.requires_grad = False
+        
+        for param in self.encoder_f.last_linear.parameters():
+            param.requires_grad = True
+        
+        for param in self.encoder_c.parameters():
+            param.requires_grad = False
+
+        for param in self.encoder_c.last_linear.parameters():
+            param.requires_grad = True
+
+        # Ensure the classifier layers are trainable
+        for param in self.head_spe.parameters():
+            param.requires_grad = True
+        for param in self.head_sha.parameters():
+            param.requires_grad = True
+
+        self.check_model_gradient()
+        
+    # ------------------------------------------------------------------ #
+    def check_model_gradient(self):
+        # Check if the gradient is active for the FC layer
+        print("encoder_f parameters")
+        for name, param in self.encoder_f.named_parameters():
+            print(f"Layer: {name}, requires_grad: {param.requires_grad}")
+
+        print("\nencoder_c parameters")
+        for name, param in self.encoder_c.named_parameters():
+            print(f"Layer: {name}, requires_grad: {param.requires_grad}")
+
+        print("\nhead_spe parameters")
+        for name, param in self.head_spe.named_parameters():
+            print(f"Layer: {name}, requires_grad: {param.requires_grad}")
+
+        print("\nhead_sha parameters")
+        for name, param in self.head_sha.named_parameters():
+            print(f"Layer: {name}, requires_grad: {param.requires_grad}")
+
+    # ---------------------------------------------------------------------- #
+
     def build_loss(self, config):
         cls_loss_class = LOSSFUNC[config['loss_func']['cls_loss']]
         spe_loss_class = LOSSFUNC[config['loss_func']['spe_loss']]
@@ -160,7 +230,7 @@ class UCFDetector(AbstractDetector):
         self_reconstruction_image_1, \
         self_reconstruction_image_2 \
             = pred_dict['recontruction_imgs']
-        # get label -> common and specific forgery labels
+        # get label
         label = data_dict['label']
         label_spe = data_dict['label_spe']
         # get pred

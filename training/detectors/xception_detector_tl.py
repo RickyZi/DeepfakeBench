@@ -51,14 +51,19 @@ logger = logging.getLogger(__name__)
 
 @DETECTOR.register_module(module_name='xception')
 class XceptionDetector(AbstractDetector):
-    def __init__(self, config):
+    def __init__(self, config, tl = False):
         super().__init__()
         self.config = config
+        self.tl = tl
         self.backbone = self.build_backbone(config)
         self.loss_func = self.build_loss(config)
         self.prob, self.label = [], []
         self.video_names = []
         self.correct, self.total = 0, 0
+
+         # If tl is True, freeze the backbone weights
+        if self.tl:
+            self.freeze_backbone()
         
     def build_backbone(self, config):
         # prepare the backbone
@@ -75,6 +80,25 @@ class XceptionDetector(AbstractDetector):
         logger.info('Load pretrained model successfully!')
         return backbone
     
+    # -------------------------------------------------- #
+    def freeze_backbone(self):
+         # Freeze all layers except the classifier
+        for param in self.backbone.parameters():
+            param.requires_grad = False
+
+        # # Ensure the classifier layer is trainable
+        for param in self.backbone.last_linear.parameters():
+            param.requires_grad = True
+
+        # the fc layer is missing in the backbone, so we need to set the classifier layer to trainable
+        self.check_model_gradient()
+
+    def check_model_gradient(self):
+        # Check if the gradient is active for the FC layer
+        for name, param in self.backbone.named_parameters():
+            print(f"Layer: {name}, requires_grad: {param.requires_grad}")
+    # -------------------------------------------------- #
+
     def build_loss(self, config):
         # prepare the loss function
         loss_class = LOSSFUNC[config['loss_func']]

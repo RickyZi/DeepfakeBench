@@ -31,7 +31,7 @@ import albumentations as A
 
 from .albu import IsotropicResize
 
-FFpp_pool=['FaceForensics++','FaceShifter','DeepFakeDetection','FF-DF','FF-F2F','FF-FS','FF-NT']#
+FFpp_pool=['FaceForensics++','FaceShifter','DeepFakeDetection','FF-DF','FF-F2F','FF-FS','FF-NT']
 
 def all_in_pool(inputs,pool):
     for each in inputs:
@@ -75,8 +75,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.lmdb = config.get('lmdb', False)
         # print("self.lmdb", self.lmdb)
 
-        self.dataset = self.config['train_dataset'] if self.mode == 'train' else self.config['test_dataset']
-        # print("dataset: ", self.dataset) # occlusion or no_occlusion
+        self.dataset = self.config['train_dataset'][0] if self.mode == 'train' else self.config['test_dataset'][0]
+        print("dataset: ", self.dataset) # occlusion or no_occlusion
         # print("self.config['test_dataset']", self.config['test_dataset'])
         # add a flag for rgb?
         # self.rgb = config.get('rgb', False) # if use rgb images
@@ -153,7 +153,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
         if gotcha: 
             trans = A.Compose([
-                A.Resize(256, 256), # make sure the image size is 256x256
+                # A.Resize(256, 256), # make sure the image size is 256x256
+                A.Resize(self.config['resolution'], self.config['resolution'], p=1), # make sure the image size is 256x256
                 A.HorizontalFlip(p=0.5),
                 A.Rotate(limit=10, p=0.5),
                 A.GaussianBlur(blur_limit=(3, 7), p=0.5),
@@ -211,7 +212,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         # Initialize the label and frame path lists
         label_list = []
         frame_path_list = []
-        
+        tot_frames_list = []
         # Record video name for video-level metrics
         video_name_list = []
 
@@ -286,7 +287,15 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 # Consider the case when the actual number of frames (e.g., 270) is larger than the specified (i.e., self.frame_num=32)
                 # In this case, we select self.frame_num frames from the original 270 frames
                 total_frames = len(frame_paths)
-                if self.frame_num < total_frames:
+                # ----------------------------------------- #
+                # print("total_frames: ", total_frames)
+                # tot_frames_list.append(total_frames)
+                # ----------------------------------------- #
+                if self.frame_num == 'all':
+                    # self.frame_num = total_frames #take all the frames
+                    print("using all frames")
+                    # continue
+                elif self.frame_num < total_frames:
                     total_frames = self.frame_num
                     if self.video_level:
                         # Select clip_size continuous frames
@@ -296,7 +305,10 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                         # Select self.frame_num frames evenly distributed throughout the video
                         step = total_frames // self.frame_num
                         frame_paths = [frame_paths[i] for i in range(0, total_frames, step)][:self.frame_num]
-                
+                # ----------------------------------------- #
+                # print("total_frames: ", total_frames)
+                # ----------------------------------------- #
+
                 # If video-level methods, crop clips from the selected frames if needed
                 if self.video_level:
                     if self.clip_size is None:
@@ -361,7 +373,11 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         shuffled = list(zip(label_list, frame_path_list, video_name_list))
         random.shuffle(shuffled)
         label_list, frame_path_list, video_name_list = zip(*shuffled)
-        
+
+        # ----------------------------------------- #
+        # print("total_frames_list: ", tot_frames_list)
+        # ----------------------------------------- #
+
         return frame_path_list, label_list, video_name_list
 
      
@@ -386,7 +402,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
             # ------------------------------------------------------------------------------- #
             # occlusion and no_occlusion dataset already have the path for loading the images #
-            if self.dataset == ['occlusion'] or  self.dataset == ['no_occlusion'] or self.dataset == 'occlusion' or  self.dataset == 'no_occlusion': 
+            # print("self.dataset: ", self.dataset)
+            # if self.dataset == ['occlusion'] or  self.dataset == ['no_occlusion'] or self.dataset == 'occlusion' or  self.dataset == 'no_occlusion': 
+            if self.dataset in ['occlusion','no_occlusion','gotcha_occlusion','gotcha_no_occlusion']:
                 # print("my dataset")
                 img = cv2.imread(file_path)
                 # breakpoint()
@@ -653,8 +671,18 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             A tuple containing the image tensor, the label tensor, the landmark tensor,
             and the mask tensor.
         """
-        # Separate the image, label, landmark, and mask tensors
-        images, labels, landmarks, masks = zip(*batch)
+         # check length of the batch
+        num_elements = len(batch[0])
+        # print("batch[0] num_elements:", num_elements)
+        if num_elements == 4:
+            # Separate the image, label, landmark, and mask tensors
+            images, labels, landmarks, masks = zip(*batch)
+        elif num_elements == 2:
+            images, labels = zip(*batch)
+        else:
+            raise ValueError(f"Invalid number of elements in the batch: {num_elements}")
+        # # Separate the image, label, landmark, and mask tensors
+        # images, labels, landmarks, masks = zip(*batch)
         
         # Stack the image, label, landmark, and mask tensors
         images = torch.stack(images, dim=0)

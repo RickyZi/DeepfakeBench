@@ -45,7 +45,7 @@ class Trainer(object):
         logger,
         metric_scoring='auc',
         tags ="",
-        # val = False,
+        tl = False,
         time_now = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
         swa_model=None
         ):
@@ -61,6 +61,7 @@ class Trainer(object):
         self.writers = {}  # dict to maintain different tensorboard writers for each dataset and metric
         self.logger = logger
         self.metric_scoring = metric_scoring
+        self.tl = tl
 
         print("metric scoring:", self.metric_scoring) # auc
 
@@ -78,7 +79,7 @@ class Trainer(object):
         # get current time
         self.timenow = time_now
         print("log_dir: ", self.config['log_dir']) # log_dir:  logs
-        breakpoint()
+        # breakpoint()
         # create directory path
         if 'task_target' not in config:
             print("task_target not in config")
@@ -88,6 +89,16 @@ class Trainer(object):
                 f"{self.config['model_name']}_{self.timenow}"
             )
             # self.log_dir = self.config['log_dir'] + '/' + self.tags + '/' + self.config['model_name'] + '_' + self.timenow + '/'
+        elif self.tl:
+            print("task_target in config and tl")
+            task_str = f"_{config['task_target']}" if config['task_target'] is not None else ""
+            if task_str == "":
+                self.log_dir = os.path.join(
+                    self.config['log_dir'],
+                    "TL", 
+                    self.tags,
+                    f"{self.config['model_name']}_{self.timenow}"
+                )
         else:
             print("task_taget in config")
             task_str = f"_{config['task_target']}" if config['task_target'] is not None else ""
@@ -109,7 +120,7 @@ class Trainer(object):
         os.makedirs(self.log_dir, exist_ok=True)
         print("log_dir: ", self.log_dir) # log_dir:  log_dir:  /home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2023-03-30-10-00-00
 
-        breakpoint()
+        # breakpoint()
 
     def get_writer(self, phase, dataset_key, metric_key): # get tensorboard writer
         writer_key = f"{phase}-{dataset_key}-{metric_key}"
@@ -244,6 +255,7 @@ class Trainer(object):
         epoch,
         train_data_loader,
         test_data_loaders=None,
+        ucf = False
         ):
 
         self.logger.info("===> Epoch[{}] start!".format(epoch))
@@ -263,16 +275,57 @@ class Trainer(object):
         # step_cnt = 0
 
         # save the training data_dict (for debugging)
-        data_dict = train_data_loader.dataset.data_dict
+        if ucf:
+            # data_dict = train_data_loader.dataset.data_dict
+            print("train_data_loader")
+            data_dict = train_data_loader.dataset.data_dict
+            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+            print("data_dict['image']", len(data_dict['image']))
+            print("data_dict['label']", len(data_dict['label']))
+
+            trn_fake_img_list = train_data_loader.dataset.fake_imglist
+            print("len(trn_fake_img_list)", len(trn_fake_img_list))
+
+            trn_real_imglist = train_data_loader.dataset.real_imglist
+            print("len(trn_real_imglist)", len(trn_real_imglist))
+
+            print("len(train_data_loader): ", len(train_data_loader)) # 600 -> 16 batches
+
+            # ------------------------------------------------------ #
+            print("test_data_loaders")
+            data_dict = test_data_loaders['occlusion'].dataset.data_dict
+            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+            print("data_dict['image']", len(data_dict['image']))
+            print("data_dict['label']", len(data_dict['label']))
+
+            tst_fake_img_list = test_data_loaders['occlusion'].dataset.fake_imglist
+            print("len(tst_fake_img_list)", len(tst_fake_img_list))
+
+            tst_real_imglist = test_data_loaders['occlusion'].dataset.real_imglist
+            print("len(tst_real_imglist)", len(tst_real_imglist))
+            # print(test_data_loaders)
+            print("len(test_data_loaders['occlusion']): ", len(test_data_loaders['occlusion'])) # 75 -> 32 batches
+            # breakpoint()
+        else:
+            data_dict = train_data_loader.dataset.data_dict
+            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+
         self.save_data_dict('train', data_dict, ','.join(self.config['train_dataset']))
 
+        # breakpoint()
         # define training recorder
         train_recorder_loss = defaultdict(Recorder) # store training loss for each batch
         # create a dictionary to store the training metric for each batch
         train_recorder_metric = defaultdict(Recorder) # store training metric for each batch
-
+        # print("out train loop")
+        # code stops here with the following error: IndexError: Index 8479 out of range for fake_imglist with length 7237
         for iteration, data_dict in tqdm(enumerate(train_data_loader),total=len(train_data_loader)):
+            # print("iteration: ", iteration)
+            # print("data_dict:", data_dict)
             self.setTrain()
+            # print("train loop")
+            # print("data_dict['image']", len(data_dict['image']))
+            # print("data_dict['label']", len(data_dict['label']))
             # more elegant and more scalable way of moving data to GPU
             for key in data_dict.keys(): 
                 # data_dict contains the image and labels 
@@ -280,6 +333,7 @@ class Trainer(object):
                     data_dict[key]=data_dict[key].cuda()
 
             losses, predictions = self.train_step(data_dict)
+            # print("losses, predictions", losses, predictions)
 
             # update learning rate
 

@@ -13,19 +13,85 @@ from dataset.abstract_dataset import DeepfakeAbstractBaseDataset
 
 
 class pairDataset(DeepfakeAbstractBaseDataset):
-    def __init__(self, config=None, mode='train'):
-        super().__init__(config, mode)
-        
-        # Get real and fake image lists
-        # Fix the label of real images to be 0 and fake images to be 1
-        self.fake_imglist = [(img, label, 1) for img, label in zip(self.image_list, self.label_list) if label != 0]
-        self.real_imglist = [(img, label, 0) for img, label in zip(self.image_list, self.label_list) if label == 0]
+    def __init__(self, config=None, mode='train', indices = None):
+        super().__init__(config, mode, indices)
+        # self.indices = indices
+        self.filterd_image_list = self.image_list
+        self.filterd_label_list = self.label_list
+        # use the subset indices to extract the new image_list and label_list
+        # if self.indices is not None:
+        #     # print("before indices")
+        #     print("len(self.image_list):", len(self.image_list))
+        #     print("len(self.label_list):", len(self.label_list))
+
+        #     self.filterd_image_list = [self.image_list[i] for i in self.indices]
+        #     self.filterd_label_list = [self.label_list[i] for i in self.indices]
+
+        #     print("len(self.filterd_image_list):", len(self.filterd_image_list))
+        #     print("len(self.filterd_label_list):", len(self.filterd_label_list))
+
+
+        self.fake_imglist = [(img, label, 1) for img, label in zip(self.filterd_image_list, self.filterd_label_list) if label != 0]
+        self.real_imglist = [(img, label, 0) for img, label in zip(self.filterd_image_list, self.filterd_label_list) if label == 0]
+
+        # debug: check the number of fake and real images (real should be circa 3 times less than fake)
+        print("len(fake_imglist):", len(self.fake_imglist)) # 9000 (1st iteration), 7200 (2nd iteration)
+        print("len(real_imglist):", len(self.real_imglist)) # 3000 (1st iteration), 1800 (2n iteration)
+
+        # print("fake_imglist[0:10]: ", self.fake_imglist[0:10])
+        # print("real_imglist[0:10]: ", self.real_imglist[0:10])
+
+        print("len(fake_imglist + real_imglist):", self.__len__())
+
+
+        self.fake_indices = [i for i, label in enumerate(self.label_list) if label != 0]
+        self.real_indices = [i for i, label in enumerate(self.label_list) if label == 0]
+        print("len(fake_indices):", len(self.fake_indices))
+        print("len(real_indices):", len(self.real_indices))
+        # Print fake and real image indices
+        # print("fake_imglist indices:", self.fake_indices)
+        # print("real_imglist indices:", self.real_indices)
+
+        # breakpoint()
+        # len(fake_imglist): 7237
+        # len(real_imglist): 2363
+        # tot real: 9600
+        # len(fake_imglist): 1763
+        # len(real_imglist): 637
+        # tot fake: 2400
+        # tot imgs: 12000 -> train dataset size
 
     def __getitem__(self, index, norm=True):
+        # print("index: ", index)
+       
+        if index in self.fake_indices:
+            # print("Fake image")
+            # get the position in the list of the fake_index
+            index = self.fake_indices.index(index) # get the index of the fake image in the fake_imglist
+            # print("corresponding index in fake_imglist:", index)
+            fake_image_path, fake_spe_label, fake_label = self.fake_imglist[index]
+
+            # Randomly select a real image
+            real_index = random.randint(0, len(self.real_imglist) - 1)
+            real_image_path, real_spe_label, real_label = self.real_imglist[real_index]
+
+        elif index in self.real_indices:
+            # print("Real image")
+            # get the position in the list of the real_index
+            real_index = self.real_indices.index(index)
+            # print("corresponding index in real_imglist:", index)
+            real_image_path, real_spe_label, real_label = self.real_imglist[real_index]
+
+            # Randomly select a fake image
+            fake_index = random.randint(0, len(self.fake_imglist) - 1)
+            fake_image_path, fake_spe_label, fake_label = self.fake_imglist[fake_index]
+        else: 
+            raise IndexError(f"index {index} is not in fake_indices or real_indices")
+
         # Get the fake and real image paths and labels
-        fake_image_path, fake_spe_label, fake_label = self.fake_imglist[index]
-        real_index = random.randint(0, len(self.real_imglist) - 1)  # Randomly select a real image
-        real_image_path, real_spe_label, real_label = self.real_imglist[real_index]
+        # fake_image_path, fake_spe_label, fake_label = self.fake_imglist[index]
+        # real_index = random.randint(0, len(self.real_imglist) - 1)  # Randomly select a real image
+        # real_image_path, real_spe_label, real_label = self.real_imglist[real_index]
 
         # Get the mask and landmark paths for fake and real images
         fake_mask_path = fake_image_path.replace('frames', 'masks')
@@ -78,7 +144,13 @@ class pairDataset(DeepfakeAbstractBaseDataset):
                 "real": (real_image_trans, real_label, real_spe_label, real_landmarks_trans, real_mask_trans)}
 
     def __len__(self):
-        return len(self.fake_imglist)
+        # return len(self.fake_imglist)
+        if len(self.fake_imglist) == len(self.real_imglist):
+            return len(self.fake_imglist) # Return the number of fake images which is equal to the number of real images
+        else: 
+            # return len(self.fake_imglist) + len(self.real_imglist) # in my case the number of fake images is 3 times the number of real images
+            # print(f"len(fake_imglist): {len(self.fake_imglist)}, len(real_imglist): {len(self.real_imglist)}, len_total = {len(self.fake_imglist) + len(self.real_imglist)}")
+            return len(self.fake_imglist) + len(self.real_imglist)
 
     @staticmethod
     def collate_fn(batch):

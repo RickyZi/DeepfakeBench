@@ -28,7 +28,7 @@ import torch.distributed as dist
 
 from optimizor.SAM import SAM
 from optimizor.LinearLR import LinearDecayLR
-from optimizor.focalLoss import FocalLoss
+from training.loss.focalLoss import FocalLoss
 
 from trainer.trainer import Trainer
 from detectors import DETECTOR
@@ -242,7 +242,7 @@ def choose_scheduler(config, optimizer):
 
 
 def choose_metric(config):
-    metric_scoring = config['metric_scoring']
+    metric_scoring = config['metric_scoring']                                                                                                                                   
     if metric_scoring not in ['eer','auc', 'acc', 'ap']:  
         raise NotImplementedError('metric {} is not implemented'.format(metric_scoring))
     return metric_scoring

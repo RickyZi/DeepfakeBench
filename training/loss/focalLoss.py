@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .abstract_loss_func import AbstractLossClass
+from metrics.registry import LOSSFUNC
 
 # ----------------------------------------- #
 # Focal loss definition
@@ -8,9 +10,12 @@ import torch.nn.functional as F
 # default values: alpha = 0.25, gamma = 2 ->  https://pytorch.org/vision/main/_modules/torchvision/ops/focal_loss.html
 # ------------------------------------------------------- #
 # converted as a class to define it as criterion 
-class FocalLoss(nn.Module):
+@LOSSFUNC.register_module(module_name="focal_loss")
+# class FocalLoss(nn.Module):
+class FocalLoss(AbstractLossClass):
     def __init__(self, alpha: float = -1, gamma: float = 2, reduction: str = "mean"): # changed default reduction to mean instead of none
-        super(FocalLoss, self).__init__()
+        # super(FocalLoss, self).__init__()
+        super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
@@ -18,6 +23,13 @@ class FocalLoss(nn.Module):
     def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         inputs = inputs.float()
         targets = targets.float()
+
+        # Ensure targets have the same shape as inputs
+        if targets.dim() == 1:
+            targets = targets.unsqueeze(1)
+        if targets.size(1) == 1:
+            targets = torch.cat((1 - targets, targets), dim=1)
+
         p = torch.sigmoid(inputs)
         ce_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction="none")
         p_t = p * targets + (1 - p) * (1 - targets)

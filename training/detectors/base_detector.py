@@ -19,7 +19,7 @@ class AbstractDetector(nn.Module, metaclass=abc.ABCMeta):
         load_param:  (False | True | Path(str))
             False Do not read; True Read the default path; Path Read the required path
         """
-        super().__init__()
+        super().__init__() # Initialize the parent class 
 
     @abc.abstractmethod
     def features(self, data_dict: dict) -> torch.tensor:

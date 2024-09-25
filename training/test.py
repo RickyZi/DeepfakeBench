@@ -263,6 +263,13 @@ def main():
     print("dataset:")
     print(args.test_dataset)
     print(config['test_dataset'])
+
+    if args.test_dataset == ['gotcha_occlusion'] or args.test_dataset == ['gotcha_no_occlusion']:
+        config['frame_num']['train'] = 'all'
+        config['frame_num']['test'] = 'all'
+    
+    print("config['frame_num']['train']", config['frame_num']['train'])
+    print("config['frame_num']['test']", config['frame_num']['test'])
     
     # if args.weights_path:
     #     config['weights_path'] = args.weights_path
