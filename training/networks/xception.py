@@ -178,7 +178,7 @@ class Xception(nn.Module):
                 nn.Linear(final_channel, self.num_classes)
             )
 
-        self.adjust_channel = nn.Sequential(
+        self.adjust_channel = nn.Sequential( # adjust the channel number to 512 for iid
             nn.Conv2d(2048, 512, 1, 1),
             nn.BatchNorm2d(512),
             nn.ReLU(inplace=False),

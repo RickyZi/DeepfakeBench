@@ -291,11 +291,11 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 # print("total_frames: ", total_frames)
                 # tot_frames_list.append(total_frames)
                 # ----------------------------------------- #
-                if self.frame_num == 'all':
-                    # self.frame_num = total_frames #take all the frames
-                    print("using all frames")
-                    # continue
-                elif self.frame_num < total_frames:
+                # if self.frame_num == 'all':
+                #     # self.frame_num = total_frames #take all the frames
+                #     print("using all frames")
+                #     # continue
+                if self.frame_num < total_frames and self.frame_num != 'all': # if the number of frames is less than the specified frame_num  
                     total_frames = self.frame_num
                     if self.video_level:
                         # Select clip_size continuous frames
@@ -305,6 +305,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                         # Select self.frame_num frames evenly distributed throughout the video
                         step = total_frames // self.frame_num
                         frame_paths = [frame_paths[i] for i in range(0, total_frames, step)][:self.frame_num]
+                else:
+                    print("using all frames")
                 # ----------------------------------------- #
                 # print("total_frames: ", total_frames)
                 # ----------------------------------------- #

@@ -77,6 +77,8 @@ parser.add_argument("--ddp", action='store_true', default=False) # whether to us
 parser.add_argument('--local_rank', type=int, default=0) # local rank for distributed data parallel
 # task target -> for logging (?)
 parser.add_argument('--task_target', type=str, default="", help='specify the target of current training task') 
+# resume training from ckpt
+parser.add_argument('--resume', type=str, help = "define the checkpoint path from which to resume the training")
 # tags 
 parser.add_argument('--tags', type=str, default="", help='specify the tags of current training task')
 args = parser.parse_args()
@@ -356,9 +358,14 @@ def main():
     # else:
     #     args.test_dataset = config['test_dataset']  
 
-    print("train_dataset", args.train_dataset)
+    print("train_dataset: ", args.train_dataset[0])
+    if args.train_dataset[0] == 'gotcha_occlusion' or args.train_dataset[0] == 'gotcha_no_occlusion':
+        print("using gotcha dataset!")
+        gotcha = True
     # print("test_dataset", args.test_dataset)
     # breakpoint()
+
+    print("frame_num: ", config['frame_num'])
 
     print("metric scoring: ", config['metric_scoring'])
     print("using accuracy (acc) as metric scoring")
@@ -432,6 +439,11 @@ def main():
             timeout=timedelta(minutes=30)
         )
         logger.addFilter(RankFilter(0))
+
+
+    # ----------------------------------------------- #
+    if args.resume is not None:
+        print("Resuming training from checkpoint: ", args.resume)
 
     ucf = False
     # split the training dataset into trn and val (80, 20 split), use the random seed in the config file
@@ -533,7 +545,7 @@ def main():
     print("len(vld_dataset)", len(vld_dataset)) # 2400
     print("type(trn_dataset)", type(trn_dataset)) # <class 'torch.utils.data.dataset.Subset'>
     print("type(vld_dataset)", type(vld_dataset)) # <class 'torch.utils.data.dataset.Subset'>
-    breakpoint()
+    # breakpoint()
 
     print("Defining the dataloaders")
     train_data_loader = \
@@ -595,7 +607,7 @@ def main():
     print("len(val_data_loader): ", len(val_data_loader))
     print("len(val_data_loaders[test_name]): ", len(val_data_loaders[test_name]))
 
-    breakpoint()
+    # breakpoint()
 
     
     
@@ -647,7 +659,7 @@ def main():
     # prepare the trainer
     trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags, args.tl) 
 
-    breakpoint()
+    # breakpoint()
 
     # start training
     print("Start training...")
@@ -657,7 +669,8 @@ def main():
                     epoch=epoch,
                     train_data_loader=train_data_loader,
                     test_data_loaders=val_data_loaders,
-                    ucf = ucf
+                    # ucf = ucf,
+                    gotcha = gotcha
                 )
         if best_metric is not None:
             logger.info(f"===> Epoch[{epoch}] end with testing {metric_scoring}: {parse_metric_for_print(best_metric)}!")

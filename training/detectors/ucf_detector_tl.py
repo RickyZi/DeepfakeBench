@@ -140,27 +140,30 @@ class UCFDetector(AbstractDetector):
     
     # ------------------------------------------------------------------ #
     def freeze_backbone(self):
-        # Freeze all layers except the classifier
-        for param in self.encoder_f.parameters():
-            param.requires_grad = False
+        # Freeze the encoder layers except the last linear layer
+        # use pre-trained ecnoder for our data
+        for name, param in self.encoder_f.named_parameters():
+            if 'last_linear' not in name:
+                param.requires_grad = False
         
-        for param in self.encoder_f.last_linear.parameters():
-            param.requires_grad = True
+        # for param in self.encoder_f.last_linear.parameters():
+        #     param.requires_grad = True
         
-        for param in self.encoder_c.parameters():
-            param.requires_grad = False
+        for name, param in self.encoder_c.named_parameters():
+            if 'last_linear' not in name:
+                param.requires_grad = False
 
-        for param in self.encoder_c.last_linear.parameters():
-            param.requires_grad = True
+        # for param in self.encoder_c.last_linear.parameters():
+        #     param.requires_grad = True
 
-        # Ensure the classifier layers are trainable
+        # keeps heads trainable (fine-tune to our data)
         for param in self.head_spe.parameters():
             param.requires_grad = True
+
         for param in self.head_sha.parameters():
             param.requires_grad = True
 
         self.check_model_gradient()
-        
     # ------------------------------------------------------------------ #
     def check_model_gradient(self):
         # Check if the gradient is active for the FC layer

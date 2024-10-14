@@ -29,7 +29,7 @@ from torch.optim.swa_utils import AveragedModel, SWALR
 from torch import distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from sklearn import metrics
-from metrics.utils import get_test_metrics, get_vld_metrics
+from metrics.utils import get_test_metrics, get_vld_metrics, gotcha_vld_metrics, gotcha_test_metrics
 
 FFpp_pool=['FaceForensics++','FF-DF','FF-F2F','FF-FS','FF-NT']#
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -255,7 +255,8 @@ class Trainer(object):
         epoch,
         train_data_loader,
         test_data_loaders=None,
-        ucf = False
+        # ucf = False,
+        gotcha = False
         ):
 
         self.logger.info("===> Epoch[{}] start!".format(epoch))
@@ -274,42 +275,44 @@ class Trainer(object):
         # test_step = 300
         # step_cnt = 0
 
-        # save the training data_dict (for debugging)
-        if ucf:
-            # data_dict = train_data_loader.dataset.data_dict
-            print("train_data_loader")
-            data_dict = train_data_loader.dataset.data_dict
-            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
-            print("data_dict['image']", len(data_dict['image']))
-            print("data_dict['label']", len(data_dict['label']))
+        # # save the training data_dict (for debugging)
+        # if ucf:
+        #     # data_dict = train_data_loader.dataset.data_dict
+        #     print("train_data_loader")
+        #     data_dict = train_data_loader.dataset.data_dict
+        #     print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+        #     print("data_dict['image']", len(data_dict['image']))
+        #     print("data_dict['label']", len(data_dict['label']))
 
-            trn_fake_img_list = train_data_loader.dataset.fake_imglist
-            print("len(trn_fake_img_list)", len(trn_fake_img_list))
+        #     trn_fake_img_list = train_data_loader.dataset.fake_imglist
+        #     print("len(trn_fake_img_list)", len(trn_fake_img_list))
 
-            trn_real_imglist = train_data_loader.dataset.real_imglist
-            print("len(trn_real_imglist)", len(trn_real_imglist))
+        #     trn_real_imglist = train_data_loader.dataset.real_imglist
+        #     print("len(trn_real_imglist)", len(trn_real_imglist))
 
-            print("len(train_data_loader): ", len(train_data_loader)) # 600 -> 16 batches
+        #     print("len(train_data_loader): ", len(train_data_loader)) # 600 -> 16 batches
 
-            # ------------------------------------------------------ #
-            print("test_data_loaders")
-            data_dict = test_data_loaders['occlusion'].dataset.data_dict
-            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
-            print("data_dict['image']", len(data_dict['image']))
-            print("data_dict['label']", len(data_dict['label']))
+        #     # ------------------------------------------------------ #
+        #     print("test_data_loaders")
+        #     data_dict = test_data_loaders['occlusion'].dataset.data_dict
+        #     print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+        #     print("data_dict['image']", len(data_dict['image']))
+        #     print("data_dict['label']", len(data_dict['label']))
 
-            tst_fake_img_list = test_data_loaders['occlusion'].dataset.fake_imglist
-            print("len(tst_fake_img_list)", len(tst_fake_img_list))
+        #     tst_fake_img_list = test_data_loaders['occlusion'].dataset.fake_imglist
+        #     print("len(tst_fake_img_list)", len(tst_fake_img_list))
 
-            tst_real_imglist = test_data_loaders['occlusion'].dataset.real_imglist
-            print("len(tst_real_imglist)", len(tst_real_imglist))
-            # print(test_data_loaders)
-            print("len(test_data_loaders['occlusion']): ", len(test_data_loaders['occlusion'])) # 75 -> 32 batches
-            # breakpoint()
-        else:
-            data_dict = train_data_loader.dataset.data_dict
-            print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
+        #     tst_real_imglist = test_data_loaders['occlusion'].dataset.real_imglist
+        #     print("len(tst_real_imglist)", len(tst_real_imglist))
+        #     # print(test_data_loaders)
+        #     print("len(test_data_loaders['occlusion']): ", len(test_data_loaders['occlusion'])) # 75 -> 32 batches
+        #     # breakpoint()
+        # else:
+        #     data_dict = train_data_loader.dataset.data_dict
+        #     print("data_dict.keys(): ", data_dict.keys()) # dict_keys(['image', 'label', 'name'])
 
+        # save the training data_dict
+        data_dict = train_data_loader.dataset.data_dict
         self.save_data_dict('train', data_dict, ','.join(self.config['train_dataset']))
 
         # breakpoint()
@@ -402,6 +405,7 @@ class Trainer(object):
                         iteration,
                         test_data_loaders,
                         step_cnt,
+                        gotcha
                     )
                 elif test_data_loaders is not None and (self.config['ddp'] and dist.get_rank() == 0):
                     self.logger.info("===> Test start! (ddp and rank 0)")
@@ -410,6 +414,7 @@ class Trainer(object):
                         iteration,
                         test_data_loaders,
                         step_cnt,
+                        gotcha
                     )
                 else:
                     print("data loader is None")
@@ -466,9 +471,11 @@ class Trainer(object):
                     data_dict[key]=data_dict[key].cuda()
             # model forward without considering gradient computation
             predictions = self.inference(data_dict)
-            label_lists += list(data_dict['label'].cpu().detach().numpy())
-            prediction_lists += list(predictions['prob'].cpu().detach().numpy())
-            feature_lists += list(predictions['feat'].cpu().detach().numpy())
+            # label_lists += list(data_dict['label'].cpu().detach().numpy())
+            # prediction_lists += list(predictions['prob'].cpu().detach().numpy())
+            # feature_lists += list(predictions['feat'].cpu().detach().numpy())
+            label_lists.extend(data_dict['label'].cpu().tolist()) # store the labels 
+            prediction_lists.extend(predictions['prob'].cpu().tolist()) # store the predictions
             if type(self.model) is not AveragedModel:
                 # compute all losses for each batch database
                 if type(self.model) is DDP:
@@ -480,7 +487,7 @@ class Trainer(object):
                 for name, value in losses.items():
                     test_recorder_loss[name].update(value)
 
-        return test_recorder_loss, np.array(prediction_lists), np.array(label_lists),np.array(feature_lists)
+        return test_recorder_loss, np.array(prediction_lists), np.array(label_lists) #,np.array(feature_lists)
 
     def save_best(self, epoch, iteration, step, losses_one_dataset_recorder, key, metric_one_dataset):
         print("save_best")
@@ -544,7 +551,7 @@ class Trainer(object):
             # writer.add_scalar(f'test_metrics/acc_fake', acc_fake, global_step=step)
         self.logger.info(metric_str)
 
-    def test_epoch(self, epoch, iteration, test_data_loaders, step): # test for each epoch -> using the best ckpt on the validation set!
+    def test_epoch(self, epoch, iteration, test_data_loaders, step, gotcha = False): # test for each epoch -> using the best ckpt on the validation set!
         # set model to eval mode
         self.setEval()
 
@@ -569,11 +576,15 @@ class Trainer(object):
             self.save_data_dict('test', data_dict, key)
 
             # compute loss for each dataset
-            losses_one_dataset_recorder, predictions_nps, label_nps, feature_nps = self.test_one_dataset(test_data_loaders[key])
+            # losses_one_dataset_recorder, predictions_nps, label_nps, feature_nps = self.test_one_dataset(test_data_loaders[key])
+            losses_one_dataset_recorder, predictions_nps, label_nps = self.test_one_dataset(test_data_loaders[key])
             # print(f'stack len:{predictions_nps.shape};{label_nps.shape};{len(data_dict["image"])}')
             losses_all_datasets[key] = losses_one_dataset_recorder
             # metric_one_dataset = get_test_metrics(y_pred=predictions_nps,y_true=label_nps,img_names=data_dict['image'], tags = self.tags, val = self.val)
-            metric_one_dataset = get_vld_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'])
+            if gotcha: 
+                metric_one_dataset = gotcha_vld_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'])
+            else:
+                metric_one_dataset = get_vld_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'])
             print("metric_one_dataset: ", metric_one_dataset)
             # get_test_metrics() missin 3 required positional arugments: 'model', 'dataset', and 'tags'
             for metric_name, value in metric_one_dataset.items():
