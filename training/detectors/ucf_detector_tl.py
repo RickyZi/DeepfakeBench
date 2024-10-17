@@ -51,28 +51,6 @@ logger = logging.getLogger(__name__)
 
 @DETECTOR.register_module(module_name='ucf')
 class UCFDetector(AbstractDetector):
-    # -------------------------------------------------------------------------------------- #
-    # TODO: 
-    # modify the code to perform TL on the UCF model
-    # in particlar, only the last layer of the model should be trained on the new dataset
-    # the rest of the model should be frozen
-
-    # HINT: 
-    # You can use the following code to freeze the layers of the model:
-    # for param in self.encoder_f.parameters():
-    #     param.requires_grad = False
-
-    # You can use the following code to unfreeze the layers of the model:
-    # for param in self.encoder_f.parameters():
-    #    param.requires_grad = True
-
-    # You can use the following code to get the parameters of the model:
-    # for name, param in self.named_parameters():
-    #     print(name, param.requires_grad)
-
-
-    # -------------------------------------------------------------------------------------- #
-
     def __init__(self, config, tl = False):
         super().__init__()
         self.config = config
@@ -81,7 +59,7 @@ class UCFDetector(AbstractDetector):
         self.encoder_feat_dim = config['encoder_feat_dim']
         self.half_fingerprint_dim = self.encoder_feat_dim//2
 
-        self.encoder_f = self.build_backbone(config) # fingerprint_encoder
+        self.encoder_f = self.build_backbone(config) # fingerprit_encoder
         self.encoder_c = self.build_backbone(config) # content_encoder
 
         self.loss_func = self.build_loss(config)
@@ -118,11 +96,13 @@ class UCFDetector(AbstractDetector):
             hidden_dim=self.half_fingerprint_dim, 
             out_f=self.half_fingerprint_dim
         )
-        
+
+        # ----------------------------------- #
         if self.tl:
             print("Freezing the backbone weights")
             self.freeze_backbone()
-
+        # ----------------------------------- #
+        
     def build_backbone(self, config):
         # prepare the backbone
         backbone_class = BACKBONE[config['backbone_name']]
@@ -133,8 +113,8 @@ class UCFDetector(AbstractDetector):
         for name, weights in state_dict.items():
             if 'pointwise' in name:
                 state_dict[name] = weights.unsqueeze(-1).unsqueeze(-1)
-        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove the fc layer
-        backbone.load_state_dict(state_dict, False) # load the pretrained weights with 
+        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove fc from the state_dict
+        backbone.load_state_dict(state_dict, False) # load model with last_linear as fc layer
         logger.info('Load pretrained model successfully!')
         return backbone
     
@@ -163,8 +143,9 @@ class UCFDetector(AbstractDetector):
         for param in self.head_sha.parameters():
             param.requires_grad = True
 
-        self.check_model_gradient()
+        # self.check_model_gradient()
     # ------------------------------------------------------------------ #
+
     def check_model_gradient(self):
         # Check if the gradient is active for the FC layer
         print("encoder_f parameters")
@@ -182,8 +163,7 @@ class UCFDetector(AbstractDetector):
         print("\nhead_sha parameters")
         for name, param in self.head_sha.named_parameters():
             print(f"Layer: {name}, requires_grad: {param.requires_grad}")
-
-    # ---------------------------------------------------------------------- #
+    # ------------------------------------------------------------------ #
 
     def build_loss(self, config):
         cls_loss_class = LOSSFUNC[config['loss_func']['cls_loss']]
@@ -218,7 +198,7 @@ class UCFDetector(AbstractDetector):
         return f_spe, f_share
     
     def get_losses(self, data_dict: dict, pred_dict: dict) -> dict:
-        if 'label_spe' in data_dict and 'recontruction_imgs' in pred_dict: # train mode -> UCF: label_spe and recontruction_imgs -> CHECK PAPER!
+        if 'label_spe' in data_dict and 'recontruction_imgs' in pred_dict:
             return self.get_train_losses(data_dict, pred_dict)
         else:  # test mode
             return self.get_test_losses(data_dict, pred_dict)
@@ -249,7 +229,7 @@ class UCFDetector(AbstractDetector):
         # 3. reconstruction loss
         self_loss_reconstruction_1 = self.loss_func['rec'](fake_img, self_reconstruction_image_1)
         self_loss_reconstruction_2 = self.loss_func['rec'](real_img, self_reconstruction_image_2)
-        cross_loss_reconstruction_1 = self.loss_func['rec'](fake_img, reconstruction_image_2) # inverted rec_img_1 and rec_img_2?
+        cross_loss_reconstruction_1 = self.loss_func['rec'](fake_img, reconstruction_image_2)
         cross_loss_reconstruction_2 = self.loss_func['rec'](real_img, reconstruction_image_1)
         loss_reconstruction = \
             self_loss_reconstruction_1 + self_loss_reconstruction_2 + \
@@ -312,7 +292,7 @@ class UCFDetector(AbstractDetector):
             # inference only consider share loss
             out_sha, sha_feat = self.head_sha(f_share)
             out_spe, spe_feat = self.head_spe(f_spe)
-            prob_sha = torch.softmax(out_sha, dim=1)[:, 1] # prob for fake class
+            prob_sha = torch.softmax(out_sha, dim=1)[:, 1]
             self.prob.append(
                 prob_sha
                 .detach()
@@ -340,7 +320,6 @@ class UCFDetector(AbstractDetector):
             # I find that pred_dict = {'cls': out_sha, 'feat': sha_feat} is missing prob, change to 
             # pred_dict = {'cls': out_sha, 'prob': prob_sha, 'feat': sha_feat} After the code runs successfully.
             # https://github.com/SCLBD/DeepfakeBench/issues/96
-            # -------------------------------------------------- #
 
             pred_dict = {'cls': out_sha, 'prob': prob_sha, 'feat': sha_feat}
             return  pred_dict

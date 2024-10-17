@@ -102,7 +102,7 @@ def get_vld_metrics(y_pred, y_true, img_names): # model, dataset,
     # output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
     # if not os.path.exists(output_dir):
     #     os.makedirs(output_dir)
-    # # -------------------------------------------------------------------- #
+    # -------------------------------------------------------------------- #
     # convert to numpy array (tensor -> numpy array), then give it to roc_curve
     # labels_list = y_true.cpu().numpy() # convert to numpy array -> true binary labels (ground truth, 0 or 1)
     # pred_list = y_pred.cpu().numpy() # convert to numpy array -> predicted scores (probabilities)
@@ -128,7 +128,7 @@ def get_vld_metrics(y_pred, y_true, img_names): # model, dataset,
     auc = metrics.auc(fpr, tpr) if not np.isnan(metrics.auc(fpr, tpr)) else 0
     # auc = metrics.roc_auc_score(y_true, y_pred) if not np.isnan(metrics.roc_auc_score(y_true, y_pred)) else 0
     # -------------------------------------------------------------------- #
-    # display the ROC curve
+    # # display the ROC curve
     # display_roc = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=auc)
     # display_roc.plot()
     # roc_path = check_graph_name(os.path.join(output_dir, 'roc_curve.png'))
@@ -149,7 +149,7 @@ def get_vld_metrics(y_pred, y_true, img_names): # model, dataset,
 
     # -------------------------------------------------------------------- #
     # compute precision and recall
-    # # y_pred_binary = (y_pred > 0.5).astype(int) # convert prediction to binary labels
+    # y_pred_binary = (y_pred > 0.5).astype(int) # convert prediction to binary labels
     # precision, recall, _ = metrics.precision_recall_curve(y_true, y_pred)
     # # compute the precision-recall curve and save it as a figure
     # display_pr = metrics.PrecisionRecallDisplay(precision=precision, recall=recall, average_precision=ap)
@@ -666,13 +666,28 @@ def gotcha_vld_metrics(y_pred, y_true, img_names): # model, dataset,
     acc_fsgan = (correct_fsgan / total_fsgan * 100) if total_fsgan != 0 else 0
     
     
+     # -------------------------------------------------------------------- #
     # balanced accuracy
     balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
+
     
     # --------------------------------------------------------------------------------------------- #
+    # Plot the histogram of the predicted probabilities for each class
+    # prob_hist_path = check_graph_name(os.path.join(output_dir, 'probability_histogram.png'))
+    # plot_prob_hist(prob_original, prob_simswap, prob_ghost, prob_facedancer, 0.5, prob_hist_path)
+    # convert to numpy array (tensor -> numpy array), then give it to roc_curve
+    # labels_list = y_true.cpu().numpy() # convert to numpy array -> true binary labels (ground truth, 0 or 1)
+    # pred_list = y_pred.cpu().numpy() # convert to numpy array -> predicted scores (probabilities)
+    # pred_list = torch.cat(y_pred, dim=0).cpu().numpy() 
+    # compute the confusion matrix, save it as a figure
     cm = metrics.confusion_matrix(y_true, prediction_class)
     # cm = confusion_matrix(labels_list, pred_list)
     tn, fp, fn, tp = cm.ravel()
+    # cm_display = metrics.ConfusionMatrixDisplay(cm).plot()
+    # cm_path = check_graph_name(os.path.join(output_dir, 'confusion_matrix.png'))
+    # cm_display.figure_.savefig(cm_path)
+    # confusion matrix tells us how many true positives, true negatives, false positives, and false negatives we have
+
     # compute TPR and TNR
     TPR = tp / (tp + fn) # sensitivity, recall -> from all the positive classes, how many were correctly predicted
     # recall should be as high as possible -> we want to avoid false negatives -> max recall = 1
@@ -684,24 +699,36 @@ def gotcha_vld_metrics(y_pred, y_true, img_names): # model, dataset,
     # breakpoint()
     # -------------------------------------------------------------------- #
     # auc
-    fpr, tpr, _ = metrics.roc_curve(y_true, y_pred, pos_label=1) #prediction_class) #, pos_label=1)
+    fpr, tpr, thresholds = metrics.roc_curve(y_true, y_pred, pos_label=1) #prediction_class) #, pos_label=1)
     # auc = metrics.auc(fpr, tpr)
     # check if auc is not NaN, in case set it to 0
     auc = metrics.auc(fpr, tpr) if not np.isnan(metrics.auc(fpr, tpr)) else 0
     # auc = metrics.roc_auc_score(y_true, y_pred) if not np.isnan(metrics.roc_auc_score(y_true, y_pred)) else 0
     # -------------------------------------------------------------------- #
+    # display the ROC curve
+    # display_roc = metrics.RocCurveDisplay(fpr=fpr, tpr=tpr, roc_auc=auc)
+    # display_roc.plot()
+    # roc_path = check_graph_name(os.path.join(output_dir, 'roc_curve.png'))
+    # display_roc.figure_.savefig(roc_path)
+    # ROC-AUC curve tells how much the model is capable of distinguishing between classes
+    # the higher the AUC, the better the model is at predicting 0s as 0s and 1s as 1s
+    # AUC = 1 -> perfect model, AUC = 0.5 -> random model
+    # ROC curve is a plot of TPR vs FPR at different classification thresholds
+    # -------------------------------------------------------------------- #
+    # eer -> Equal Error Rate: the poi nt where fnr = fpr. The lower the EER, the better the model is at distinguishing between classes
+  
+
     # Find the EER by finding the threshold where fnr = fpr
     fnr = 1 - tpr
     # eer_threshold = thresholds[np.nanargmin(np.absolute((fnr - fpr)))] if not np.isnan(fpr).all() and not np.isnan(fnr).all() else -1
     eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] if not np.isnan(fpr).all() and not np.isnan(fnr).all() else -1 # np.isnan(fpr).all() -> check if fpr contains only NaN values
-    # eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))] # Equal Error Rate is computed as the point where fnr = fpr -> in general the lower the EER, the higher the model's accuracy
-    # plot the EER graph
     # -------------------------------------------------------------------- #
     # ap -> Average Precision: the higher the AP, the better the model is at distinguishing between classes.
     ap = metrics.average_precision_score(y_true, y_pred)
     # pos_label: 1 (default) -> the class to report if average='binary' and pos_label is not specified 
     # in our case, pos_label = 0 (real) and neg_label = 1 (fake) -> but we are interested in the ability of the model in detecting fake images -> so we set pos_label = 1 
 
+    
     
     return {
         'acc': acc, # Accuracy
@@ -710,12 +737,13 @@ def gotcha_vld_metrics(y_pred, y_true, img_names): # model, dataset,
         'test_accuracy_original': acc_original,
         'test_accuracy_dfl': acc_dfl,
         'test_accuracy_fsgan': acc_fsgan,
+        # 'test_accuracy_facedancer': acc_facedancer,
         'ap': ap, # Average Precision 
         # 'video_auc': v_auc, # keep it? 
         'TPR': TPR, # True Positive Rate (Sensitivity or Recall)
         'TNR': TNR, # True Negative Rate (Specificity)
         'auc': auc, # Area Under the ROC Curve
-        'eer': eer # Equal Error Rate 
+        'eer': eer, # Equal Error Rate 
         # -------------------------------------------------------------------- #
         # 'precision': precision_scr, # Precision
         # 'recall': list(recall),
@@ -959,3 +987,4 @@ def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = Fa
         'label': list(y_true), # list of labels
         'img_path_collection': img_names # list of image paths
     }
+

@@ -359,6 +359,7 @@ def main():
     #     args.test_dataset = config['test_dataset']  
 
     print("train_dataset: ", args.train_dataset[0])
+    gotcha = False
     if args.train_dataset[0] == 'gotcha_occlusion' or args.train_dataset[0] == 'gotcha_no_occlusion':
         print("using gotcha dataset!")
         gotcha = True
@@ -368,9 +369,9 @@ def main():
     print("frame_num: ", config['frame_num'])
 
     print("metric scoring: ", config['metric_scoring'])
-    print("using accuracy (acc) as metric scoring")
-    config['metric_scoring'] = 'acc'
-    print("metric scoring: ", config['metric_scoring'])
+    # print("using accuracy (acc) as metric scoring")
+    # config['metric_scoring'] = 'acc'
+    # print("metric scoring: ", config['metric_scoring'])
 
     config['save_ckpt'] = args.save_ckpt
     config['save_feat'] = args.save_feat

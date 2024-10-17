@@ -172,9 +172,9 @@ class Xception(nn.Module):
             self.mode = 'adjust_channel'
         self.last_linear = nn.Linear(final_channel, self.num_classes) # last_linear is the classifier layer -> output 2 classes (real/fake)
         
-        if dropout:
+        if dropout: # dropout is used for the last layer of the classifier -> deactivate some neurons to prevent overfitting -> regularization technique
             self.last_linear = nn.Sequential(
-                nn.Dropout(p=dropout),
+                nn.Dropout(p=dropout), 
                 nn.Linear(final_channel, self.num_classes)
             )
 

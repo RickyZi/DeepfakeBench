@@ -8,23 +8,26 @@ backbone_name: xception  # backbone name
 
 #backbone setting
 backbone_config:
-  mode: original
-  num_classes: 2 # 2 classes in the dataset: real and fake
-  inc: 3 
-  dropout: false
+  mode: original #adjust_channel_iid #original
+  num_classes: 2
+  inc: 3
+  dropout: false #0.1 #0.2 #false
 
 # dataset
-all_dataset: [occlusion, no_occlusion, gotcha_occ, gotcha_no_occ]
-#[FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV, occlusion, no_occlusion]
-train_dataset: [occlusion] #FaceForensics++]
-test_dataset: [occlusion] #[FaceForensics++, DeepFakeDetection]
-# val_dataset: [occlusion] #FaceForensics++]
+all_dataset: [occlusion, no_occlusion, gotcha_occlusion, gotcha_no_occlusion]
+#[FaceForensics++, FF-F2F, FF-DF, FF-FS, FF-NT, FaceShifter, DeepFakeDetection, Celeb-DF-v1, Celeb-DF-v2, DFDCP, DFDC, DeeperForensics-1.0, UADFV, occlusion, no_occlusion, gotcha_occlusion, gotcha_no_occlusion]
+train_dataset: [gotcha_occlusion] #[FaceForensics++]
+test_dataset: [gotcha_occlusion] #[FaceForensics++, DeepFakeDetection]
 
 compression: c23  # compression-level for videos
 train_batchSize: 32   # training batch size
 test_batchSize: 32   # test batch size
 workers: 8   # number of data loading workers
-frame_num: {'train': 100, 'test': 100} #{'train': 32, 'test': 32}   # number of frames to use per video in training and testing
+frame_num: {'train': 32, 'test': 32} # default frame_num
+# frame_num: {'train': 200, 'test': 200} #{'train': 32, 'test': 32}   # number of frames to use per video in training and testing
+# frame_num: {'train': 'all', 'test': 500} # all  
+# frame_num: {'train': 100, 'test': 100}
+# 100 ok, 200ok, 300 boh, 'all' killed
 resolution: 256   # resolution of output image to network
 with_mask: false   # whether to include mask information in the input
 with_landmark: false   # whether to include facial landmark information in the input
@@ -66,7 +69,18 @@ optimizer:
 
 # training config
 lr_scheduler: null   # learning rate scheduler
-nEpochs: 10   # number of epochs to train for
+# -------------------------------------------- #
+# lr_scheduler: step   # learning rate scheduler
+# lr_step: 2 # 1 
+# lr_gamma: 0.1
+# -------------------------------------------- #
+# lr_scheduler: cosine   # CosineAnnealingLR scheduler
+# lr_T_max: 10   # number of epochs for learning rate to reach 0
+# lr_eta_min: 0   # minimum learning rate value
+# -------------------------------------------- #
+# lr_scheduler: linear   # Linear LR scheduler
+# -------------------------------------------- #
+nEpochs: 10 #15   # number of epochs to train for
 start_epoch: 0   # manual epoch number (useful for restarts)
 save_epoch: 1   # interval epochs for saving models
 rec_iter: 100   # interval iterations for recording
@@ -76,11 +90,11 @@ save_ckpt: true   # whether to save checkpoint
 save_feat: true   # whether to save features
 
 # loss function
-loss_func: cross_entropy   # loss function to use
+loss_func: focal_loss #cross_entropy   # loss function to use
 losstype: null
 
 # metric
-metric_scoring: auc   # metric for evaluation (auc, acc, eer, ap)
+metric_scoring: acc #auc   # metric for evaluation (auc, acc, eer, ap)
 
 # cuda
 

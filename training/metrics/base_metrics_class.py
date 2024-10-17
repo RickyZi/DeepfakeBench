@@ -30,7 +30,7 @@ def calculate_metrics_for_train(label, output):
     # Accuracy
     _, prediction = torch.max(output, 1)
     correct = (prediction == label).sum().item()
-    accuracy = correct / prediction.size(0)
+    accuracy = (correct / prediction.size(0))*100 # to get 84.375 instead of 0.84375 as accuracy
 
     # Average Precision
     y_true = label.cpu().detach().numpy()

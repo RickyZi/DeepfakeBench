@@ -75,8 +75,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.lmdb = config.get('lmdb', False)
         # print("self.lmdb", self.lmdb)
 
-        self.dataset = self.config['train_dataset'][0] if self.mode == 'train' else self.config['test_dataset'][0]
-        print("dataset: ", self.dataset) # occlusion or no_occlusion
+        self.dataset = self.config['train_dataset'][0] if self.mode == 'train' else self.config['test_dataset']
+        print("abstract_dataset - self.dataset: ", self.dataset) # occlusion or no_occlusion
         # print("self.config['test_dataset']", self.config['test_dataset'])
         # add a flag for rgb?
         # self.rgb = config.get('rgb', False) # if use rgb images
@@ -289,24 +289,23 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                 total_frames = len(frame_paths)
                 # ----------------------------------------- #
                 # print("total_frames: ", total_frames)
-                # tot_frames_list.append(total_frames)
+                tot_frames_list.append(total_frames)
                 # ----------------------------------------- #
                 # if self.frame_num == 'all':
                 #     # self.frame_num = total_frames #take all the frames
                 #     print("using all frames")
                 #     # continue
-                if self.frame_num < total_frames and self.frame_num != 'all': # if the number of frames is less than the specified frame_num  
+                # elif self.frame_num < total_frames:
+                if self.frame_num != 'all' and self.frame_num < total_frames: 
                     total_frames = self.frame_num
                     if self.video_level:
                         # Select clip_size continuous frames
-                        start_frame = random.randint(0, total_frames - self.frame_num)
+                        start_frame = random.randint(0, total_frames - self.frame_num) if self.mode == 'train' else 0
                         frame_paths = frame_paths[start_frame:start_frame + self.frame_num]  # update total_frames
                     else:
                         # Select self.frame_num frames evenly distributed throughout the video
                         step = total_frames // self.frame_num
                         frame_paths = [frame_paths[i] for i in range(0, total_frames, step)][:self.frame_num]
-                else:
-                    print("using all frames")
                 # ----------------------------------------- #
                 # print("total_frames: ", total_frames)
                 # ----------------------------------------- #
@@ -330,13 +329,13 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                             # Select clip_size continuous frames from each part of the video
                             for i in range(num_clips):
                                 # Ensure start_frame + self.clip_size - 1 does not exceed the index of the last frame
-                                start_frame = random.randrange(i * clip_step, min((i + 1) * clip_step, total_frames - self.clip_size + 1))
+                                start_frame = random.randrange(i * clip_step, min((i + 1) * clip_step, total_frames - self.clip_size + 1)) if self.mode == 'train' else i * clip_step
                                 continuous_frames = frame_paths[start_frame:start_frame + self.clip_size]
                                 assert len(continuous_frames) == self.clip_size, 'clip_size is not equal to the length of frame_path_list'
                                 selected_clips.append(continuous_frames)
 
                         else:
-                            start_frame = random.randrange(0, total_frames - self.clip_size + 1)
+                            start_frame = random.randrange(0, total_frames - self.clip_size + 1) if self.mode == 'train' else 0
                             continuous_frames = frame_paths[start_frame:start_frame + self.clip_size]
                             assert len(continuous_frames)==self.clip_size, 'clip_size is not equal to the length of frame_path_list'
                             selected_clips.append(continuous_frames)
@@ -378,8 +377,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
         # ----------------------------------------- #
         # print("total_frames_list: ", tot_frames_list)
+        # breakpoint()
         # ----------------------------------------- #
-
+        
         return frame_path_list, label_list, video_name_list
 
      

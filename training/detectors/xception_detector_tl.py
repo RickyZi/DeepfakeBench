@@ -61,44 +61,75 @@ class XceptionDetector(AbstractDetector):
         self.video_names = []
         self.correct, self.total = 0, 0
 
-         # If tl is True, freeze the backbone weights
+        # breakpoint()
+
+        # ----------------------------------- #
         if self.tl:
+            print("Freezing the backbone weights")
             self.freeze_backbone()
+        # ----------------------------------- #
         
     def build_backbone(self, config):
         # prepare the backbone
         backbone_class = BACKBONE[config['backbone_name']]
         model_config = config['backbone_config']
-        backbone = backbone_class(model_config) # call the backbone class to build the backbone with the model_config options
-        # if do not load the pretrained weights, fail to get good results
-        state_dict = torch.load(config['pretrained']) # load the pretrained weights
+        backbone = backbone_class(model_config)
+        # if donot load the pretrained weights, fail to get good results
+        state_dict = torch.load(config['pretrained'])
         for name, weights in state_dict.items():
             if 'pointwise' in name:
                 state_dict[name] = weights.unsqueeze(-1).unsqueeze(-1)
-        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove the fc layer 
-        backbone.load_state_dict(state_dict, False) # load the pretrained weights 
+        state_dict = {k:v for k, v in state_dict.items() if 'fc' not in k} # remove classifier from state_dict 
+        backbone.load_state_dict(state_dict, False)
         logger.info('Load pretrained model successfully!')
+        # print(backbone)
+        
         return backbone
     
-    # -------------------------------------------------- #
+    # ----------------------------------- #
     def freeze_backbone(self):
-         # Freeze all layers except the classifier
+        # self.check_model_gradient()
+        # breakpoint()
+
         for param in self.backbone.parameters():
             param.requires_grad = False
+        
+        print(self.backbone.last_linear)
 
-        # # Ensure the classifier layer is trainable
         for param in self.backbone.last_linear.parameters():
             param.requires_grad = True
+        
+        # print("classifier: " self.classifier)
 
-        # the fc layer is missing in the backbone, so we need to set the classifier layer to trainable
         self.check_model_gradient()
+        # breakpoint()
+        
+        # # Ensure the classifier layer is trainable
+        # if hasattr(self.backbone, 'classifier'):
+            
+        #     print("classifier")
+        #     print(self.backbone.classifier)
+
+        #     # for param in self.backbone.classifier.parameters():
+        #     #     param.requires_grad = True
+        # elif hasattr(self.backbone, 'fc'):
+        #     print("fc")
+        #     print(self.backbone.fc)
+        #     # for param in self.backbone.fc.parameters():
+        #     #     param.requires_grad = True
+        # elif hasattr(self.backbone, 'last_linear'):
+        #     print("last_linear")
+        #     print(self.backbone.last_linear)
+        # else:
+        #     raise AttributeError("The backbone model does not have a 'classifier' or 'fc' attribute.")
+
 
     def check_model_gradient(self):
         # Check if the gradient is active for the FC layer
         for name, param in self.backbone.named_parameters():
             print(f"Layer: {name}, requires_grad: {param.requires_grad}")
-    # -------------------------------------------------- #
-
+    # ----------------------------------- #
+    
     def build_loss(self, config):
         # prepare the loss function
         loss_class = LOSSFUNC[config['loss_func']]
@@ -106,7 +137,7 @@ class XceptionDetector(AbstractDetector):
         return loss_func
     
     def features(self, data_dict: dict) -> torch.tensor:
-        return self.backbone.features(data_dict['image']) # 32,3,256,256
+        return self.backbone.features(data_dict['image']) #32,3,256,256
 
     def classifier(self, features: torch.tensor) -> torch.tensor:
         return self.backbone.classifier(features)
@@ -131,13 +162,11 @@ class XceptionDetector(AbstractDetector):
 
     def forward(self, data_dict: dict, inference=False) -> dict:
         # get the features by backbone
-        features = self.features(data_dict) # extract the features from the input image
+        features = self.features(data_dict)
         # get the prediction by classifier
-        pred = self.classifier(features) # compute the prediction by the classifier -> logits -> (batch_size, num_classes) -> pred of real or fake class
+        pred = self.classifier(features)
         # get the probability of the pred
-        prob = torch.softmax(pred, dim=1)[:, 1] # softmax for the class 1 (fake) -> select the prob of the second class for each prediction in the batch
+        prob = torch.softmax(pred, dim=1)[:, 1]
         # build the prediction dict for each output
         pred_dict = {'cls': pred, 'prob': prob, 'feat': features}
-        # cls: is the prediction of the classifier (logits), the shape is (batch_size, num_classes) -> pred of real or fake class
-        # prob: is the probability of the prediction, the shape is (batch_size,) -> prob of fake class (1)
         return pred_dict
