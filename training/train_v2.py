@@ -68,6 +68,7 @@ parser.add_argument('--detector', type=str, default = 'xception', help='detector
 parser.add_argument("--train_dataset", nargs="+") 
 # parser.add_argument("--test_dataset", nargs="+") # used as validation dataset
 parser.add_argument("--tl", action="store_true", default=False) # use transfer learning for training the model
+parser.add_argument("--ft", action="store_true", default=False)
 # nargs = '+' means one or more arguments, if not provided, default is None
 # flags for saving checkpoint and features (output of the model) -> --no-save-feat -> save_feat = False
 parser.add_argument('--no-save_ckpt', dest='save_ckpt', action='store_false', default=True) 
@@ -363,10 +364,27 @@ def main():
     if args.train_dataset[0] == 'gotcha_occlusion' or args.train_dataset[0] == 'gotcha_no_occlusion':
         print("using gotcha dataset!")
         gotcha = True
-    # print("test_dataset", args.test_dataset)
-    # breakpoint()
+        config['frame_num']['train'] = 32 # default frame_num
+
+        if args.detector == 'ucf':
+            config['loss_func']['cls_loss'] = 'cross_entropy'
+            config['loss_func']['spe_loss'] = 'cross_entropy'
+
+        if args.detector == 'xception': 
+            config['loss_func']= 'cross_entropy'
+    else:
+        config['frame_num']['train'] = 100 # 100 frames per folder in thesis dataset
+        if args.detector == 'ucf':
+            config['loss_func']['cls_loss'] = 'focal_loss'
+            config['loss_func']['spe_loss'] = 'focal_loss'
+
+        if args.detector == 'xception':
+            config['loss_func'] = 'focal_loss'
+    
 
     print("frame_num: ", config['frame_num'])
+    print("loss_func: ", config['loss_func'])
+    breakpoint()
 
     print("metric scoring: ", config['metric_scoring'])
     # print("using accuracy (acc) as metric scoring")
@@ -402,6 +420,8 @@ def main():
     # create logger for saving testing results
     if args.tags and args.tl:
         log_path = config['log_dir']+'/TL/'+ args.tags + '/training/logs/training.log'
+    elif args.tags and args.ft:
+        log_path = config['log_dir']+'/FT/'+ args.tags + '/training/logs/training.log'
     elif args.tags:
         log_path = config['log_dir']+'/'+ args.tags + '/training/logs/training.log'
     else:
@@ -658,7 +678,7 @@ def main():
     metric_scoring = choose_metric(config)
 
     # prepare the trainer
-    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags, args.tl) 
+    trainer = Trainer(config, model, optimizer, scheduler, logger, metric_scoring, args.tags, args.tl, args.ft) 
 
     # breakpoint()
 
