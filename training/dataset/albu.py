@@ -33,7 +33,7 @@ class IsotropicResize(DualTransform):
 
     def apply(self, img, interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC, **params):
         return isotropically_resize_image(img, size=self.max_side, interpolation_down=interpolation_down,
-                                          interpolation_up=interpolation_up)
+                                          interpolation_up=interpolation_up) # resize image to max_side x max_side keeping aspect ratio (padding with 0s)
 
     def apply_to_mask(self, img, **params):
         return self.apply(img, interpolation_down=cv2.INTER_NEAREST, interpolation_up=cv2.INTER_NEAREST, **params)

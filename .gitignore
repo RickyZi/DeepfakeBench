@@ -1,3 +1,4 @@
+# add all the files and folders that you want to ignore in the git repository
 _DFB_intradataset_results_13-11-2024_
 _DFB_results_28-10-2024_
 _gradcam_block_sha_
@@ -6,4 +7,4 @@ DFB_results_old
 _DFB_results_28-10-2024_.zip
 training/results/*
 _gradcam_output_
-
+ucf_cross_models_gradcam

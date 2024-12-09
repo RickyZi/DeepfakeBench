@@ -302,7 +302,7 @@ class UCFDetector(AbstractDetector):
 
     def forward(self, data_dict: dict, inference=False) -> dict:
         print("UCF - forward")
-        print("inference: ", inference)
+        
         # split the features into the content and forgery
         features = self.features(data_dict)
         forgery_features, content_features = features['forgery'], features['content']
@@ -316,13 +316,14 @@ class UCFDetector(AbstractDetector):
         print("foward data_dict: ", data_dict)
         if type(data_dict) != dict:
             inference =True
-        breakpoint()
-
+        # breakpoint()
+        print("inference: ", inference)
         if inference:
             # inference only consider share loss
             out_sha, sha_feat = self.head_sha(f_share)
             out_spe, spe_feat = self.head_spe(f_spe)
             prob_sha = torch.softmax(out_sha, dim=1)[:, 1]
+            print("prob_sha: ", prob_sha)
             self.prob.append(
                 prob_sha
                 .detach()

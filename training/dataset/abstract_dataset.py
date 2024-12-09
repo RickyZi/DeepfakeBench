@@ -44,7 +44,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
     """
     Abstract base class for all deepfake datasets.
     """
-    def __init__(self, config=None, mode='train', indicies = None, gotcha = False): #, val = False):
+    def __init__(self, config=None,  mode='train', indicies = None, test_robustness = ""): #, val = False):
         """Initializes the dataset object.
 
         Args:
@@ -54,16 +54,20 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         Raises:
             NotImplementedError: If mode is not train or test.
         """
+
+        print("init abstract dataset")
         
         # Set the configuration and mode
         self.config = config
         self.mode = mode
-        # print("self.mode", mode)
+        print("self.mode", mode)
         self.indicies = indicies
+        self.test_robustness = test_robustness
         # self.val = val
-        self.gotcha = gotcha
+        # self.gotcha = gotcha
         # print(type(self.config['train_dataset']))
         # print(type(self.config['test_dataset']))
+        print("self.test_robustness: ", self.test_robustness)
         # breakpoint()
 
         self.compression = config['compression']
@@ -74,9 +78,15 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         self.clip_size = config.get('clip_size', None)
         self.lmdb = config.get('lmdb', False)
         # print("self.lmdb", self.lmdb)
-
+        # print("train_dataset: ", self.config['train_dataset'])
+        # print("test_dataset: ", self.config['test_dataset'])
         self.dataset = self.config['train_dataset'][0] if self.mode == 'train' else self.config['test_dataset']
+        # print("abstract_dataset - self.dataset: ", self.dataset) # occlusion or no_occlusion
+        # if len(self.dataset) < 2 and self.mode == 'test':
+        #     self.dataset = self.config['test_dataset']
+
         print("abstract_dataset - self.dataset: ", self.dataset) # occlusion or no_occlusion
+        
         # print("self.config['test_dataset']", self.config['test_dataset'])
         # add a flag for rgb?
         # self.rgb = config.get('rgb', False) # if use rgb images
@@ -146,46 +156,111 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             'image': self.image_list, 
             'label': self.label_list, 
         }
-        
-        self.transform = self.init_data_aug_method(self.gotcha)
-        
-    def init_data_aug_method(self, gotcha=False):
 
-        if gotcha: 
-            trans = A.Compose([
-                # A.Resize(256, 256), # make sure the image size is 256x256
-                A.Resize(self.config['resolution'], self.config['resolution'], p=1), # make sure the image size is 256x256
-                A.HorizontalFlip(p=0.5),
-                A.Rotate(limit=10, p=0.5),
-                A.GaussianBlur(blur_limit=(3, 7), p=0.5),
-                A.OneOf([
-                    A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2),
-                    A.FancyPCA(),
-                    A.HueSaturationValue()
-                ], p=0.5),
-                A.ImageCompression(quality_lower=60, quality_upper=100, p=0.5)
-            ], 
-                keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
-            )
-        else:
+        # print("data_dict[image]", self.data_dict['image'])
+        # print("data_dict[label]", self.data_dict['label'])
+        
+        self.transform = self.init_data_aug_method(self.test_robustness) # self.gotcha
+        
+    def init_data_aug_method(self, test_robustness = ""): # gotcha = False
+
+        # if gotcha: 
+        #     trans = A.Compose([
+        #         # A.Resize(256, 256), # make sure the image size is 256x256
+        #         A.Resize(self.config['resolution'], self.config['resolution'], p=1), # make sure the image size is 256x256
+        #         A.HorizontalFlip(p=0.5),
+        #         A.Rotate(limit=10, p=0.5),
+        #         A.GaussianBlur(blur_limit=(3, 7), p=0.5),
+        #         A.OneOf([
+        #             A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2),
+        #             A.FancyPCA(),
+        #             A.HueSaturationValue()
+        #         ], p=0.5),
+        #         A.ImageCompression(quality_lower=60, quality_upper=100, p=0.5)
+        #     ], 
+        #         keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
+        #     )
+        if test_robustness == 'median_filter':
+            # using default values from the config file
+            # medianBlur -> takining same values as gauss blur
             trans = A.Compose([           
-                A.HorizontalFlip(p=self.config['data_aug']['flip_prob']),
-                A.Rotate(limit=self.config['data_aug']['rotate_limit'], p=self.config['data_aug']['rotate_prob']),
-                A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
-                A.OneOf([                
-                    IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC),
-                    IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_LINEAR),
-                    IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR, interpolation_up=cv2.INTER_LINEAR),
-                ], p = 0 if self.config['with_landmark'] else 1),
-                A.OneOf([
-                    A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit']),
-                    A.FancyPCA(),
-                    A.HueSaturationValue()
-                ], p=0.5),
-                A.ImageCompression(quality_lower=self.config['data_aug']['quality_lower'], quality_upper=self.config['data_aug']['quality_upper'], p=0.5)
-            ], 
-                keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
-            )
+                    A.HorizontalFlip(p=self.config['data_aug']['flip_prob']),
+                    A.Rotate(limit=self.config['data_aug']['rotate_limit'], p=self.config['data_aug']['rotate_prob']),
+                    # A.MedianBlur(blur_limit=3),
+                    A.MedianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=1.0), #self.config['data_aug']['blur_prob']),
+                    # A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
+                    A.OneOf([                
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC), # resize image to desired resolution keeping the aspect ratio
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_LINEAR),
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR, interpolation_up=cv2.INTER_LINEAR),
+                    ], p = 0 if self.config['with_landmark'] else 1),
+                    # A.OneOf([
+                    #     A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit']),
+                    #     A.FancyPCA(),
+                    #     A.HueSaturationValue()
+                    # ], p=0.5),
+                    # A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit']),
+                    # A.ImageCompression(quality_lower=self.config['data_aug']['quality_lower'], quality_upper=self.config['data_aug']['quality_upper'], p=0.5)
+                ], 
+                    keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
+                )
+        elif test_robustness == 'jpeg_compression':
+            trans = A.Compose([           
+                    A.HorizontalFlip(p=self.config['data_aug']['flip_prob']),
+                    A.Rotate(limit=self.config['data_aug']['rotate_limit'], p=self.config['data_aug']['rotate_prob']),
+                    # A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
+                    A.OneOf([                
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC), # resize image to desired resolution keeping the aspect ratio
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_LINEAR),
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR, interpolation_up=cv2.INTER_LINEAR),
+                    ], p = 0 if self.config['with_landmark'] else 1),
+                    A.ImageCompression(quality_lower=70, quality_upper=99, p=1.0)
+                ], 
+                    keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
+                )
+        elif test_robustness == 'random_brightness':
+            trans = A.Compose([           
+                    A.HorizontalFlip(p=self.config['data_aug']['flip_prob']),
+                    A.Rotate(limit=self.config['data_aug']['rotate_limit'], p=self.config['data_aug']['rotate_prob']),
+                    # A.MedianBlur(blur_limit=3),
+                    # A.MedianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=1.0), #self.config['data_aug']['blur_prob']),
+                    # A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
+                    A.OneOf([                
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC), # resize image to desired resolution keeping the aspect ratio
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_LINEAR),
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR, interpolation_up=cv2.INTER_LINEAR),
+                    ], p = 0 if self.config['with_landmark'] else 1),
+                    # A.OneOf([
+                    #     A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit']),
+                    #     A.FancyPCA(),
+                    #     A.HueSaturationValue()
+                    # ], p=0.5),
+                    A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit'], p=1.0),
+                    # A.ImageCompression(quality_lower=self.config['data_aug']['quality_lower'], quality_upper=self.config['data_aug']['quality_upper'], p=0.5)
+                ], 
+                    keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
+                )
+        else:
+            # use base data aug transform
+            # isotropicResize -> resize image to desired resolution keeping the aspect ratio
+            trans = A.Compose([           
+                    A.HorizontalFlip(p=self.config['data_aug']['flip_prob']),
+                    A.Rotate(limit=self.config['data_aug']['rotate_limit'], p=self.config['data_aug']['rotate_prob']),
+                    A.GaussianBlur(blur_limit=self.config['data_aug']['blur_limit'], p=self.config['data_aug']['blur_prob']),
+                    A.OneOf([                
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_CUBIC),
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_AREA, interpolation_up=cv2.INTER_LINEAR),
+                        IsotropicResize(max_side=self.config['resolution'], interpolation_down=cv2.INTER_LINEAR, interpolation_up=cv2.INTER_LINEAR),
+                    ], p = 0 if self.config['with_landmark'] else 1),
+                    A.OneOf([
+                        A.RandomBrightnessContrast(brightness_limit=self.config['data_aug']['brightness_limit'], contrast_limit=self.config['data_aug']['contrast_limit']),
+                        A.FancyPCA(),
+                        A.HueSaturationValue()
+                    ], p=0.5),
+                    A.ImageCompression(quality_lower=self.config['data_aug']['quality_lower'], quality_upper=self.config['data_aug']['quality_upper'], p=0.5)
+                ], 
+                    keypoint_params=A.KeypointParams(format='xy') if self.config['with_landmark'] else None
+                )
         return trans
 
     def rescale_landmarks(self, landmarks, original_size=256, new_size=224):
@@ -406,7 +481,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             # occlusion and no_occlusion dataset already have the path for loading the images #
             # print("self.dataset: ", self.dataset)
             # if self.dataset == ['occlusion'] or  self.dataset == ['no_occlusion'] or self.dataset == 'occlusion' or  self.dataset == 'no_occlusion': 
-            if self.dataset in ['occlusion','no_occlusion','gotcha_occlusion','gotcha_no_occlusion']:
+            if self.dataset in ['occlusion','no_occlusion','gotcha_occlusion','gotcha_no_occlusion', 'gotcha_occ_testing', 'gotcha_no_occ_testing', 'dfb_occ_testing', 'dfb_no_occ_testing']:
                 # print("my dataset")
                 img = cv2.imread(file_path)
                 # breakpoint()
@@ -586,6 +661,9 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         image_paths = self.data_dict['image'][index]
         label = self.data_dict['label'][index]
 
+        # print("image_paths: ", image_paths)
+        # print("label: ", label)
+
         if not isinstance(image_paths, list):
             image_paths = [image_paths]  # for the image-level IO, only one frame is used
 
@@ -658,7 +736,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             if not any(m is None or (isinstance(m, list) and None in m) for m in mask_tensors):
                 mask_tensors = mask_tensors[0]
 
-        return image_tensors, label, landmark_tensors, mask_tensors
+        return image_tensors, label, landmark_tensors, mask_tensors 
     
     @staticmethod
     def collate_fn(batch):
@@ -681,6 +759,8 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             images, labels, landmarks, masks = zip(*batch)
         elif num_elements == 2:
             images, labels = zip(*batch)
+        # elif num_elements == 3:
+        #     images, labels, imgs_paths = zip(*batch)
         else:
             raise ValueError(f"Invalid number of elements in the batch: {num_elements}")
         # # Separate the image, label, landmark, and mask tensors
@@ -705,6 +785,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
         data_dict = {}
         data_dict['image'] = images
         data_dict['label'] = labels
+        # data_dict['img_paths'] = imgs_paths
         data_dict['landmark'] = landmarks
         data_dict['mask'] = masks
         return data_dict

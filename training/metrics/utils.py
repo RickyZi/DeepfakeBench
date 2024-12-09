@@ -280,60 +280,156 @@ def plot_prob_hist(prob_original, prob_simswap, prob_ghost, prob_facedancer, thr
 
 
 
-def get_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = False): # model, dataset, 
+def get_test_metrics(y_pred, y_true, img_names, output_dir): # tags=''): # tl = False, ft = False, gen = False): # model, dataset, 
     # compute video-level auc for the frame-level methods.
     # img_names: list of image paths (list of tuples)
-    def get_video_metrics(image, pred, label):
-        result_dict = {}
-        new_label = []
-        new_pred = []
-        # print(image[0])
-        # print(pred.shape)
-        # print(label.shape)
-        for item in np.transpose(np.stack((image, pred, label)), (1, 0)):
+    # def get_video_metrics(image, pred, label):
+    #     result_dict = {}
+    #     new_label = []
+    #     new_pred = []
+    #     # print(image[0])
+    #     # print(pred.shape)
+    #     # print(label.shape)
+    #     for item in np.transpose(np.stack((image, pred, label)), (1, 0)):
 
-            s = item[0]
-            if '\\' in s:
-                parts = s.split('\\')
-            else:
-                parts = s.split('/')
-            a = parts[-2]
-            b = parts[-1]
+    #         s = item[0]
+    #         if '\\' in s:
+    #             parts = s.split('\\')
+    #         else:
+    #             parts = s.split('/')
+    #         a = parts[-2]
+    #         b = parts[-1]
 
-            if a not in result_dict:
-                result_dict[a] = []
+    #         if a not in result_dict:
+    #             result_dict[a] = []
 
-            result_dict[a].append(item)
-        image_arr = list(result_dict.values())
+    #         result_dict[a].append(item)
+    #     image_arr = list(result_dict.values())
 
-        for video in image_arr:
-            pred_sum = 0
-            label_sum = 0
-            leng = 0
-            for frame in video:
-                pred_sum += float(frame[1])
-                label_sum += int(frame[2])  
-                leng += 1
-            new_pred.append(pred_sum / leng)
-            new_label.append(int(label_sum / leng))
-        fpr, tpr, thresholds = metrics.roc_curve(new_label, new_pred)
-        v_auc = metrics.auc(fpr, tpr)
-        fnr = 1 - tpr
+    #     for video in image_arr:
+    #         pred_sum = 0
+    #         label_sum = 0
+    #         leng = 0
+    #         for frame in video:
+    #             pred_sum += float(frame[1])
+    #             label_sum += int(frame[2])
+    #             leng += 1
+    #         new_pred.append(pred_sum / leng)
+    #         new_label.append(int(label_sum / leng))
+    #     fpr, tpr, thresholds = metrics.roc_curve(new_label, new_pred)
+    #     v_auc = metrics.auc(fpr, tpr)
+    #     fnr = 1 - tpr
+    #     v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
+    #     return v_auc, v_eer
+    # ------------------------------------------------------------------------- #
+    # def get_video_metrics(image, pred, label):
+    #     result_dict = {}
+    #     new_label = []
+    #     new_pred = []
+    #     print(image[0]) # img path
+    #     print(pred.shape) # (4800, )
+    #     print(label.shape) # (4800, )
 
+    #     print(np.stack((image, pred, label)))
+        
+    #     i = 0
 
-        # Check for NaN values in fnr and fpr
-        if np.isnan(fnr).all() or np.isnan(fpr).all():
-            # raise ValueError("fnr or fpr contains only NaN values")
+    #     for item in np.transpose(np.stack((image, pred, label)), (1, 0)):
+            
+    #         if i == 0:
+    #             print("item: ", item)
 
-            # handle NaN values by filling them with a default value
-            fnr = np.nan_to_num(fnr, nan=0.0)
-            fpr = np.nan_to_num(fpr, nan=0.0)
+    #         s = item[0] # image path
+    #         if '\\' in s:
+    #             parts = s.split('\\')
+    #         else:
+    #             parts = s.split('/')
+    #         a = parts[-2]
+    #         b = parts[-1]
+    #         print("a:", a) # vid_name
+    #         print("b:", b) # frame_name
+    #         # breakpoint()
 
-        v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
-        return v_auc, v_eer
+    #         if a not in result_dict:
+    #             result_dict[a] = []
 
-        # v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
-        # return v_auc, v_eer
+    #         result_dict[a].append(item)
+
+    #         # the result_dict keys are the name of the videos -> hand_occ_1/2/3, obj_occ_1/2/3
+    #         # however it takes all the frames from all the algos -> tot # imgs = 800
+
+    #     image_arr = list(result_dict.values())
+    #     print("result_dict: ", result_dict)
+    #     print("len(image_arr):", len(image_arr)) # 6 (because we have 6 vid challnges)
+    #     print("image_arr[0]:", image_arr[0:5]) # list of tuples
+    #     print("len(image_arr[0])", len(image_arr[0])) # 800 elements [image, pred, label]
+    #     # print("image_arr", image_arr)
+    #     breakpoint()
+
+    #     for video in image_arr:
+    #         pred_sum = 0
+    #         label_sum = 0
+    #         zero_label_sum = 0
+    #         one_label_sum = 0
+    #         leng = 0
+    #         frame_collection = []
+    #         for frame in video:
+    #             frame_collection.append(frame[0])
+    #             pred_sum += float(frame[1])
+    #             label_sum += int(frame[2])  
+    #             # if frame[2] == '1':
+    #             #     one_label_sum += 1 #int(frame[2])
+    #             # else:
+    #             #     zero_label_sum += 1 #int(frame[2])
+    #             leng += 1
+
+    #         # dirty way to try to solve unbalanced dataset  
+    #         # if zero_label_sum < one_label_sum:
+    #         #     new_zero_label_sum = zero_label_sum * 3 
+    #         #     label_sum = new_zero_label_sum + one_label_sum
+    #         # else:
+    #         #     label_sum = zero_label_sum + one_label_sum
+
+    #         # print("pred_sum", pred_sum)
+    #         # print("label_sum", label_sum)
+    #         print("leng: ", leng)
+    #         new_pred.append(pred_sum / leng)
+    #         new_label.append(int(label_sum / leng))
+
+    #     print("len(new_label):", len(new_label)) # 6
+    #     print("new_label:", new_label)
+    #     breakpoint()
+    #     print("len(new_pred):", len(new_pred)) # 6
+    #     print("new_pred:", new_pred)
+    #     breakpoint()
+        
+    #     fpr, tpr, _ = metrics.roc_curve(new_label, new_pred)
+    #     print("fpr: ", fpr) # 3 values -> [0.         0.16666667 1.        ]
+    #     print("tpr: ", tpr)
+    #     breakpoint()
+    #     v_auc = metrics.auc(fpr, tpr)
+    #     print("v_auc: ", v_auc)
+    #     breakpoint()
+    #     fnr = 1 - tpr
+    #     print("fnr: ", fnr)
+    #     breakpoint()
+
+    #     # # Check for NaN values in fnr and fpr
+    #     # if np.isnan(fnr).all() or np.isnan(fpr).all():
+    #     #     # raise ValueError("fnr or fpr contains only NaN values")
+
+    #     #     # handle NaN values by filling them with a default value
+    #     #     fnr = np.nan_to_num(fnr, nan=0.0)
+    #     #     fpr = np.nan_to_num(fpr, nan=0.0)
+
+    #     v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
+    #     print("v_eer: ", v_eer)
+    #     breakpoint()
+
+    #     return v_auc, v_eer
+
+    #     # v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
+    #     # return v_auc, v_eer
 
     # -------------------------------------------------------------------- #
     # keep track of the number of correct predictions for each class
@@ -436,13 +532,15 @@ def get_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = False
     # balanced accuracy
     balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
 
-    # Ensure the directory exists
-    if tl:
-        output_dir = '/home/rz/DeepfakeBench/training/results/TL/'+tags +'/testing/graphs/'
-    elif gen:
-        output_dir = '/home/rz/DeepfakeBench/training/results/GEN/'+tags +'/testing/graphs/'
-    else: 
-        output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
+    # # Ensure the directory exists
+    # if tl:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/TL/'+tags +'/testing/graphs/'
+    # elif ft:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/FT/'+tags +'/testing/graphs/'
+    # elif gen:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/GEN/'+tags +'/testing/graphs/'
+    # else: 
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -574,15 +672,18 @@ def get_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = False
     # precision should be as high as possible -> we want to avoid false positives -> max precision = 1
     # -------------------------------------------------------------------- #
 
-    
-
     # # compute video-level auc for the frame-level methods.
+    # print("type(img_names[0]): ", type(img_names[0]))
+    # breakpoint()
     # if type(img_names[0]) is not list: 
     #     # calculate video-level auc for the frame-level methods.
     #     v_auc, _ = get_video_metrics(img_names, y_pred, y_true)
     # else:
     #     # video-level methods
     #     v_auc=auc
+
+    # print(f"v_auc = {v_auc:.4f}")
+    # breakpoint()
 
     # return {'acc': acc, 'auc': auc, 'eer': eer, 'ap': ap, 'pred': y_pred, 'video_auc': v_auc, 'label': y_true}
     
@@ -781,7 +882,7 @@ def gotcha_plot_prob_hist(prob_original, prob_dfl, prob_fsgan, thresh, exp_resul
 
 
 
-def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = False): # model, dataset, 
+def gotcha_test_metrics(y_pred, y_true, img_names, output_dir): #tags='', tl = False, ft = False, gen = False): # model, dataset, 
     # compute video-level auc for the frame-level methods.
     # img_names: list of image paths (list of tuples)
     def get_video_metrics(image, pred, label):
@@ -805,8 +906,12 @@ def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = Fa
                 result_dict[a] = []
 
             result_dict[a].append(item)
+        
+        print(result_dict.keys())
         image_arr = list(result_dict.values())
-
+        print("len(image_arr)", len(image_arr))
+        print(image_arr[0])
+        breakpoint()
         for video in image_arr:
             pred_sum = 0
             label_sum = 0
@@ -815,20 +920,32 @@ def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = Fa
                 pred_sum += float(frame[1])
                 label_sum += int(frame[2])  
                 leng += 1
+            print("pred_sum: ", pred_sum)
+            print("label_sum", label_sum)
+            print("leng", leng)
             new_pred.append(pred_sum / leng)
             new_label.append(int(label_sum / leng))
+        
+        print("len(new_pred): ", len(new_pred))
+        print("new_pred: ", new_pred)
+        print("len(new_label): ", len(new_label))
+        print("new_label: ", new_label)
+
         fpr, tpr, thresholds = metrics.roc_curve(new_label, new_pred)
+        print("fpr: ", fpr)
+        print("tpr", tpr)
         v_auc = metrics.auc(fpr, tpr)
         fnr = 1 - tpr
+        print("fnr: ", fnr)
 
 
-        # Check for NaN values in fnr and fpr
-        if np.isnan(fnr).all() or np.isnan(fpr).all():
-            # raise ValueError("fnr or fpr contains only NaN values")
+        # # Check for NaN values in fnr and fpr
+        # if np.isnan(fnr).all() or np.isnan(fpr).all():
+        #     # raise ValueError("fnr or fpr contains only NaN values")
 
-            # handle NaN values by filling them with a default value
-            fnr = np.nan_to_num(fnr, nan=0.0)
-            fpr = np.nan_to_num(fpr, nan=0.0)
+        #     # handle NaN values by filling them with a default value
+        #     fnr = np.nan_to_num(fnr, nan=0.0)
+        #     fpr = np.nan_to_num(fpr, nan=0.0)
 
         v_eer = fpr[np.nanargmin(np.absolute((fnr - fpr)))]
         return v_auc, v_eer
@@ -889,13 +1006,15 @@ def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = Fa
     # balanced accuracy
     balanced_acc = metrics.balanced_accuracy_score(y_true, prediction_class) 
 
-    # Ensure the directory exists
-    if tl:
-        output_dir = '/home/rz/DeepfakeBench/training/results/TL/'+tags +'/testing/graphs/'
-    elif gen:
-        output_dir = '/home/rz/DeepfakeBench/training/results/GEN/'+tags +'/testing/graphs/'
-    else: 
-        output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
+    # # Ensure the directory exists
+    # if tl:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/TL/'+tags +'/testing/graphs/'
+    # elif ft:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/FT/'+tags +'/testing/graphs/'
+    # elif gen:
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/GEN/'+tags +'/testing/graphs/'
+    # else: 
+    #     output_dir = '/home/rz/DeepfakeBench/training/results/'+tags +'/testing/graphs/' #'/home/rz/DeepfakeBench/training/metrics/graphs/'+model+'/dfb_'+dataset
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
@@ -967,6 +1086,21 @@ def gotcha_test_metrics(y_pred, y_true, img_names, tags='', tl = False, gen = Fa
     pr_path = check_graph_name(os.path.join(output_dir, 'pr_curve.png'))
     display_pr.figure_.savefig(pr_path)
     
+    # # compute video-level auc for the frame-level methods.
+    # print("type(img_names[0]): ", type(img_names[0]))
+    # breakpoint()
+    # if type(img_names[0]) is not list: 
+    #     # calculate video-level auc for the frame-level methods.
+    #     v_auc, v_eer = get_video_metrics(img_names, y_pred, y_true)
+    # else:
+    #     # video-level methods
+    #     v_auc=auc
+    #     v_eer = eer
+
+    # print(f"v_auc = {v_auc:.4f}")
+    # print(f"v_eer = {v_eer:.4f}")
+    # breakpoint()
+
     return {
         'acc': acc, # Accuracy
         'balanced_acc': balanced_acc,

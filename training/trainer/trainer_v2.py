@@ -46,6 +46,7 @@ class Trainer(object):
         metric_scoring='auc',
         tags ="",
         tl = False,
+        ft = False,
         time_now = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S'),
         swa_model=None
         ):
@@ -62,6 +63,7 @@ class Trainer(object):
         self.logger = logger
         self.metric_scoring = metric_scoring
         self.tl = tl
+        self.ft = ft
 
         print("metric scoring:", self.metric_scoring) # auc
 
@@ -96,6 +98,17 @@ class Trainer(object):
                 self.log_dir = os.path.join(
                     self.config['log_dir'],
                     "TL", 
+                    self.tags,
+                    f"{self.config['model_name']}_{self.timenow}"
+                )
+
+        elif self.ft: 
+            print("task_target in config and tl")
+            task_str = f"_{config['task_target']}" if config['task_target'] is not None else ""
+            if task_str == "":
+                self.log_dir = os.path.join(
+                    self.config['log_dir'],
+                    "FT", 
                     self.tags,
                     f"{self.config['model_name']}_{self.timenow}"
                 )
@@ -244,7 +257,7 @@ class Trainer(object):
                 losses = self.model.get_losses(data_dict, predictions)
             self.optimizer.zero_grad()
             losses['overall'].backward()
-            self.optimizer.step()
+            self.optimizer.step() 
 
 
             return losses, predictions

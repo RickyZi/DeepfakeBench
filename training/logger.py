@@ -101,17 +101,18 @@ def create_logger(log_path):
 
 def check_if_log_file_exists(log_path):
     if os.path.exists(log_path):
-        if '_v' not in log_path:
-            # log_path = log_path.replace('.log', '_v2.log')
-            # return log_path
-            version = 1
-        else: version = 2
+        # if '_v' not in log_path:
+        #     # log_path = log_path.replace('.log', '_v2.log')
+        #     # return log_path
+        #     version = 1
+        # else: version = 2
         # add "version 2" to the log file name
         
         while os.path.exists(log_path): # check if the log file exists in the directory
             if version == 1:
                 log_path = log_path.replace('.log', f'_v{version}.log')
-            log_path = log_path.replace(f'_v{version-1}.log', f'_v{version}.log')
+            else: 
+                log_path = log_path.replace(f'_v{version-1}.log', f'_v{version}.log')
             version += 1
         return log_path
     else:

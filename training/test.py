@@ -45,7 +45,9 @@ parser.add_argument("--test_dataset", nargs="+") # define the test dataset name 
 parser.add_argument('--tags', type=str, default="occlusion", help='tags for the test')
 parser.add_argument('--tl', action = "store_true", default=False) # Transfer Learning
 parser.add_argument('--ft', action = "store_true", default = False)  # Fine Tuning
-parser.add_argument('--gen', action = "store_true", default=False)
+parser.add_argument('--gen', action = "store_true", default=False) # Generalization
+parser.add_argument('--robust', action = "store_true", default=False) # Test Robustness to other transf
+
 # parser.add_argument('--weights_path', type=str, 
 #                     default='../dfb_weights/xception_best.pth'
 #                     )
@@ -70,14 +72,16 @@ def init_seed(config):
         torch.cuda.manual_seed_all(config['manualSeed'])
 
 
-def prepare_testing_data(config):
+def prepare_testing_data(config, test_robustness = False):
     def get_test_data_loader(config, test_name):
         # update the config dictionary with the specific testing dataset
         config = config.copy()  # create a copy of config to avoid altering the original one
         config['test_dataset'] = test_name  # specify the current test dataset
         test_set = DeepfakeAbstractBaseDataset(
                 config=config,
-                mode='test', 
+                mode='test',
+                indicies= None, # indicies are used for extracting trn and vld split in training, not in testing
+                test_robustness = test_robustness
             )
         test_data_loader = \
             torch.utils.data.DataLoader(
@@ -135,7 +139,7 @@ def test_one_dataset(model, data_loader):
     
     return np.array(prediction_lists), np.array(label_lists),np.array(feature_lists)
     
-def test_epoch(model, test_data_loaders, logger,  tags, gotcha = False): # model_name, dataset_name,
+def test_epoch(model, test_data_loaders, logger,  tags, output_dir, gotcha = False): # model_name, dataset_name,
     # set model to eval mode
     model.eval()
     print("test_epoch gotcha: ", gotcha)
@@ -160,9 +164,9 @@ def test_epoch(model, test_data_loaders, logger,  tags, gotcha = False): # model
         
         # compute metric for each dataset
         if gotcha:
-            metric_one_dataset = gotcha_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], tags = tags, tl = args.tl, ft = args.ft, gen = args.gen)
+            metric_one_dataset = gotcha_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], output_dir = output_dir) #tags = tags, tl = args.tl, ft = args.ft, gen = args.gen)
         else:
-            metric_one_dataset = get_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], tags = tags, tl = args.tl, ft = args.ft, gen = args.gen) # model = model_name, dataset = dataset_name
+            metric_one_dataset = get_test_metrics(y_pred=predictions_nps, y_true=label_nps, img_names=data_dict['image'], output_dir = output_dir) # tags = tags, tl = args.tl, ft = args.ft, gen = args.gen) # model = model_name, dataset = dataset_name
         metrics_all_datasets[key] = metric_one_dataset
         
         # log the experiment info
@@ -222,84 +226,217 @@ def main():
 
     print("tl: ", args.tl)
     print("ft: ", args.ft)
+    print("test_robusteness: ", args.robust)
     print("dataset: ", args.test_dataset)
     print("dataset[0]:", args.test_dataset[0])
+    print("detector: ", args.detector)
     # breakpoint()
 
     gotcha = False 
+    weights_path = ''
 
-    if args.detector == 'xception':
+    # if args.detector == 'xception':
+    #     detector_yaml = './config/detector/xception.yaml'       
+    #     model_name = 'xception'
+    #     if args.tl and args.test_dataset[0] == "occlusion":
+    #         # if args.pretrained:
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_occ_TL/xception_2024-09-20-13-28-49/test/occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
+    #         # '/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_def_frame_num/xception_2024-10-15-13-23-43/test/occlusion/ckpt_best.pth' # test with 32 frames for trn
+    #         #
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_originalTrain/xception_2024-10-15-09-03-15/test/occlusion/ckpt_best.pth' # original DFB training strategy
+
+    #         # ---------------------------------------- #
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_adjChannel/xception_2024-10-14-12-51-27/test/occlusion/ckpt_best.pth' # adjust_channel -> RESULTS IMPROVE!!!!!
+    #         # ---------------------------------------- #
+    #         # '/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_lrSched/xception_2024-10-14-12-30-11/test/occlusion/ckpt_best.pth' # linear lr_sched
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout_and_lr/xception_2024-10-14-12-09-28/test/occlusion/ckpt_best.pth' # cosine_lr_sched + dropout (0.3)
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout/xception_2024-10-11-13-35-39/test/occlusion/ckpt_best.pth' # dropout = 0.2
+            
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout_and_lr/xception_2024-10-11-14-01-02/test/occlusion/ckpt_best.pth' # test dropout + lr_scheduler
+
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test/xception_2024-10-10-13-39-04/test/occlusion/ckpt_best.pth' #test auc as vld metric
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL/xception_2024-10-10-13-21-53/test/occlusion/ckpt_best.pth' # test new validation definitio
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL/xception_2024-09-20-13-28-49/test/occlusion/ckpt_best.pth' # focal_Loss [use this!!!!]
+    #         #'/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
+    #         # weights_path = '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth'
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         # config['pretrained'] = weights_path
+    #         # print(config['pretrained'])
+    #     elif args.tl and args.test_dataset[0] == "no_occlusion":
+    #         # if args.pretrained:
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_no_occ_TL/xception_2024-10-15-09-55-04/test/no_occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_no_occ_TL/xception_2024-09-20-14-04-26/test/no_occlusion/ckpt_best.pth' #USE_THIS
+    #         # '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL-focalLoss/xception_2024-09-18-08-35-37/test/occlusion/ckpt_best.pth'
+    #         #'/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
+    #         # weights_path = '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth'
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         # config['pretrained'] = weights_path
+    #         # print(config['pretrained'])
+    #     elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
+    #         # model trained with 100 imgs per class
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_occ_TL_def_frame_num/xception_2024-10-15-12-40-10/test/gotcha_occlusion/ckpt_best.pth' # test 32 frames for trn/tst (default frame_num)'
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_gotcha_occ_TL/xception_2024-10-10-09-58-48/test/gotcha_occlusion/ckpt_best.pth' # use this!!
+    #         #
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_gotcha_occ_TL/xception_2024-10-10-09-58-48/test/gotcha_occlusion/ckpt_best.pth' # use this!!
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_gotcha_occ_TL/xception_2024-10-03-12-21-24/test/gotcha_occlusion/ckpt_best.pth'
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
+    #         # model trained with 200 imgs per class
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_no_occ_TL/xception_2024-10-15-13-57-27/test/gotcha_no_occlusion/ckpt_best.pth' # test 32 frames for trn/tst
+    #         #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_gotcha_no_occ_TL/xception_2024-10-03-13-13-29/test/gotcha_no_occlusion/ckpt_best.pth'
+    #         print(f"using FT {model_name} model: {weights_path}")
+    #         gotcha = True
+            
+    #     elif args.ft and args.test_dataset[0] == 'occlusion':
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_occ_FT/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
+    #         #'/home/rz/DeepfakeBench/training/results/FT/Xception_dfb_occ_FT/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+
+    #     elif args.ft and args.test_dataset[0] == 'no_occlusion':
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_no_occ_FT/xception_2024-09-11-12-31-09/test/no_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+
+    #     elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_occ_FT/xception_2024-10-22-09-51-18/test/gotcha_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_no_occ_FT/xception_2024-10-22-10-29-24/test/gotcha_no_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     else:
+    #         weights_path = './pretrained/xception_best.pth'
+    #         print("using default pretrained model: ", weights_path)
+    #         if args.test_dataset[0] == 'gotcha_occlusion' or args.test_dataset[0] == 'gotcha_no_occlusion':
+    #             gotcha = True
+
+        
+    # elif args.detector == 'ucf':
+    #     detector_yaml = './config/detector/ucf.yaml'
+    #     model_name = 'ucf'
+    #     # load pretrained model
+    #     if args.tl and args.test_dataset[0] == 'occlusion':
+    #         # if args.pretrained:
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_occ_TL/ucf_2024-10-16-11-27-39/test/occlusion/ckpt_best.pth' # base UCF training (100 ex in trn/tst and focal_loss)
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-30-09-16-49/test/occlusion/ckpt_best.pth' # ucf w/ lr_scheduler 10 epochs lr_step = 2
+    #         # '/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-30-08-09-04/test/occlusion/ckpt_best.pth'ucf w/ lr_Scheduler 8 epochs - lr_step = 2
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-26-15-06-25/test/occlusion/ckpt_best.pth' # ucf w/ lr_Scheduler 5 epochs - lr_step = 1
+    #         # weights_path = '/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_focal_loss/ucf_2024-09-26-12-48-10/test/occlusion/ckpt_best.pth'
+    #         # ---------------------------------------------------------------------------------------------------------------- #
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL/ucf_2024-09-26-08-58-01/test/occlusion/ckpt_best.pth'
+    #         #'/home/rz/DeepfakeBench/training/results/UCF-dfb-occ-TL/ucf_2024-09-17-07-59-22/test/occlusion/ckpt_best.pth'
+    #          # ---------------------------------------------------------------------------------------------------------------- #
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         # config['pretrained'] = weights_path
+    #         # print(config['pretrained'])
+    #     elif args.tl and args.test_dataset[0] == 'no_occlusion':
+    #         # if args.pretrained:
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_no_occ_TL/ucf_2024-10-16-12-32-33/test/no_occlusion/ckpt_best.pth' # base UCF training with 100 ex per trn/tst and focal_loss 
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL_lr_sched/ucf_2024-09-30-11-38-36/test/no_occlusion/ckpt_best.pth' # ucf w/step_lr_scheduler each 2 out of 10 training epochs
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL_focal_loss/ucf_2024-09-26-13-35-50/test/no_occlusion/ckpt_best.pth'
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL/ucf_2024-09-26-09-44-17/test/no_occlusion/ckpt_best.pth'
+    #         print(f"using TL {model_name} model: {weights_path}")
+
+    #     elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
+    #         weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_gotcha_occ_TL/ucf_2024-10-16-08-10-31/test/gotcha_occlusion/ckpt_best.pth' # ucf 32 imgs in trn/test & auc test metric
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_occ_TL/ucf_2024-10-15-14-13-55/test/gotcha_occlusion/ckpt_best.pth' # ucf trained with 32 imgs per user but auc as test metric
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_occ_TL/ucf_2024-10-09-12-04-14/test/gotcha_occlusion/ckpt_best.pth' # ucf trained on the whole dataset
+    #         #  
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
+    #         weights_path = '/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-08-58-28/test/gotcha_no_occlusion/ckpt_best.pth'
+    #         #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-07-29-26/test/gotcha_no_occlusion/ckpt_best.pth' # ucf trained with 32 imgs but auc as test metric
+    #         print(f"using TL {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     elif args.ft and args.test_dataset[0] == 'occlusion':
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_occ_FT/ucf_2024-10-17-10-02-39/test/occlusion/ckpt_best.pth'
+    #         print(f"using FT {model_name} model: {weights_path}")
+
+    #     elif args.ft and args.test_dataset[0] == 'no_occlusion':
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_no_occ_FT/ucf_2024-10-17-08-19-41/test/no_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+
+    #     elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_occ_FT/ucf_2024-10-27-16-11-31/test/gotcha_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
+    #         weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_no_occ_FT/ucf_2024-10-27-17-45-13/test/gotcha_no_occlusion/ckpt_best.pth' 
+    #         print(f"using FT {model_name} model: {weights_path}")
+    #         gotcha = True
+
+    #     else:
+    #         weights_path = './pretrained/ucf_best.pth'
+    #         print(f"using default pretrained {model_name} model: {weights_path}")
+    #         if args.test_dataset[0] == 'gotcha_occlusion' or args.test_dataset[0] == 'gotcha_no_occlusion':
+    #             gotcha = True
+    # else:
+    #     raise NotImplementedError('detector {} is not implemented'.format(args.detector))
+
+    # ------------------------------------------------------------------------------------------- #
+     # if args.detector == 'xception':
+    if 'xception' in args.detector.lower():
         detector_yaml = './config/detector/xception.yaml'       
         model_name = 'xception'
-        if args.tl and args.test_dataset[0] == "occlusion":
-            # if args.pretrained:
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_occ_TL/xception_2024-09-20-13-28-49/test/occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
-            # '/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_def_frame_num/xception_2024-10-15-13-23-43/test/occlusion/ckpt_best.pth' # test with 32 frames for trn
-            #
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_originalTrain/xception_2024-10-15-09-03-15/test/occlusion/ckpt_best.pth' # original DFB training strategy
+        # if args.tl and args.test_dataset[0] == "occlusion":
+        # elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
+        if args.tl : 
+            if 'gotcha_occ' in args.detector:
+                # model trained with 100 imgs per class
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_occ_TL_def_frame_num/xception_2024-10-15-12-40-10/test/gotcha_occlusion/ckpt_best.pth' # test 32 frames for trn/tst (default frame_num)'
+                print(f"using TL model {args.detector}: {weights_path}")
+                #gotcha = True
 
-            # ---------------------------------------- #
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_adjChannel/xception_2024-10-14-12-51-27/test/occlusion/ckpt_best.pth' # adjust_channel -> RESULTS IMPROVE!!!!!
-            # ---------------------------------------- #
-            # '/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_lrSched/xception_2024-10-14-12-30-11/test/occlusion/ckpt_best.pth' # linear lr_sched
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout_and_lr/xception_2024-10-14-12-09-28/test/occlusion/ckpt_best.pth' # cosine_lr_sched + dropout (0.3)
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout/xception_2024-10-11-13-35-39/test/occlusion/ckpt_best.pth' # dropout = 0.2
-            
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test_dropout_and_lr/xception_2024-10-11-14-01-02/test/occlusion/ckpt_best.pth' # test dropout + lr_scheduler
+            # elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
+            elif 'gotcha_no_occ' in args.detector:
+                # model trained with 200 imgs per class
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_no_occ_TL/xception_2024-10-15-13-57-27/test/gotcha_no_occlusion/ckpt_best.pth' # test 32 frames for trn/tst
+                #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_gotcha_no_occ_TL/xception_2024-10-03-13-13-29/test/gotcha_no_occlusion/ckpt_best.pth'
+                print(f"using TL model {args.detector}: {weights_path}")
+                #gotcha = True
+            elif 'dfb_occ' in args.detector: 
+                # if args.pretrained:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_occ_TL/xception_2024-09-20-13-28-49/test/occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
+                print(f"using TL model {args.detector}: {weights_path}")
+                # config['pretrained'] = weights_path
+                # print(config['pretrained'])
+            # elif args.tl and args.test_dataset[0] == "no_occlusion":
+            elif 'dfb_no_occ' in args.detector:
+                # if args.pretrained:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_no_occ_TL/xception_2024-10-15-09-55-04/test/no_occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
+                print(f"using TL model {args.detector}: {weights_path}")
+                # config['pretrained'] = weights_path
+                # print(config['pretrained'])
+        elif args.ft: 
+            # elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
+            if 'gotcha_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_occ_FT/xception_2024-10-22-09-51-18/test/gotcha_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
+                #gotcha = True
 
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL_test/xception_2024-10-10-13-39-04/test/occlusion/ckpt_best.pth' #test auc as vld metric
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL/xception_2024-10-10-13-21-53/test/occlusion/ckpt_best.pth' # test new validation definitio
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_occ_TL/xception_2024-09-20-13-28-49/test/occlusion/ckpt_best.pth' # focal_Loss [use this!!!!]
-            #'/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
-            # weights_path = '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth'
-            print(f"using TL {model_name} model: {weights_path}")
-            # config['pretrained'] = weights_path
-            # print(config['pretrained'])
-        elif args.tl and args.test_dataset[0] == "no_occlusion":
-            # if args.pretrained:
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_dfb_no_occ_TL/xception_2024-10-15-09-55-04/test/no_occlusion/ckpt_best.pth' # focal_loss [USE THIS!!!!]
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_no_occ_TL/xception_2024-09-20-14-04-26/test/no_occlusion/ckpt_best.pth' #USE_THIS
-            # '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL-focalLoss/xception_2024-09-18-08-35-37/test/occlusion/ckpt_best.pth'
-            #'/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
-            # weights_path = '/home/rz/DeepfakeBench/training/results/Xception-dfb-occ-TL/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth'
-            print(f"using TL {model_name} model: {weights_path}")
-            # config['pretrained'] = weights_path
-            # print(config['pretrained'])
-        elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
-            # model trained with 100 imgs per class
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_occ_TL_def_frame_num/xception_2024-10-15-12-40-10/test/gotcha_occlusion/ckpt_best.pth' # test 32 frames for trn/tst (default frame_num)'
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_gotcha_occ_TL/xception_2024-10-10-09-58-48/test/gotcha_occlusion/ckpt_best.pth' # use this!!
-            #
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_gotcha_occ_TL/xception_2024-10-10-09-58-48/test/gotcha_occlusion/ckpt_best.pth' # use this!!
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_gotcha_occ_TL/xception_2024-10-03-12-21-24/test/gotcha_occlusion/ckpt_best.pth'
-            print(f"using TL {model_name} model: {weights_path}")
-            gotcha = True
+            # elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
+            elif 'gotcha_no_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_no_occ_FT/xception_2024-10-22-10-29-24/test/gotcha_no_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
+                #gotcha = True
+            # elif args.ft and args.test_dataset[0] == 'occlusion':
+            elif  'dfb_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_occ_FT/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
+                #'/home/rz/DeepfakeBench/training/results/FT/Xception_dfb_occ_FT/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
 
-        elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
-            # model trained with 200 imgs per class
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/Xception_gotcha_no_occ_TL/xception_2024-10-15-13-57-27/test/gotcha_no_occlusion/ckpt_best.pth' # test 32 frames for trn/tst
-            #'/home/rz/DeepfakeBench/training/results/TL/Xception_dfb_gotcha_no_occ_TL/xception_2024-10-03-13-13-29/test/gotcha_no_occlusion/ckpt_best.pth'
-            print(f"using FT {model_name} model: {weights_path}")
-            gotcha = True
-            
-        elif args.ft and args.test_dataset[0] == 'occlusion':
-            weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_occ_FT/xception_2024-09-11-11-41-36/test/occlusion/ckpt_best.pth'
-            #'/home/rz/DeepfakeBench/training/results/FT/Xception_dfb_occ_FT/xception_2024-09-17-12-32-52/test/occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-
-        elif args.ft and args.test_dataset[0] == 'no_occlusion':
-            weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_no_occ_FT/xception_2024-09-11-12-31-09/test/no_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-
-        elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
-            weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_occ_FT/xception_2024-10-22-09-51-18/test/gotcha_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-            gotcha = True
-
-        elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
-            weights_path = '/media/data/model_exp_results/DFB/FT/Xception_gotcha_no_occ_FT/xception_2024-10-22-10-29-24/test/gotcha_no_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-            gotcha = True
+            # elif args.ft and args.test_dataset[0] == 'no_occlusion':
+            elif  'dfb_no_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/Xception_dfb_no_occ_FT/xception_2024-09-11-12-31-09/test/no_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
 
         else:
             weights_path = './pretrained/xception_best.pth'
@@ -308,63 +445,64 @@ def main():
                 gotcha = True
 
         
-    elif args.detector == 'ucf':
+    # elif args.detector == 'ucf':
+    elif 'ucf' in args.detector.lower():
         detector_yaml = './config/detector/ucf.yaml'
         model_name = 'ucf'
         # load pretrained model
-        if args.tl and args.test_dataset[0] == 'occlusion':
-            # if args.pretrained:
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_occ_TL/ucf_2024-10-16-11-27-39/test/occlusion/ckpt_best.pth' # base UCF training (100 ex in trn/tst and focal_loss)
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-30-09-16-49/test/occlusion/ckpt_best.pth' # ucf w/ lr_scheduler 10 epochs lr_step = 2
-            # '/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-30-08-09-04/test/occlusion/ckpt_best.pth'ucf w/ lr_Scheduler 8 epochs - lr_step = 2
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_lr_sched/ucf_2024-09-26-15-06-25/test/occlusion/ckpt_best.pth' # ucf w/ lr_Scheduler 5 epochs - lr_step = 1
-            # weights_path = '/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL_focal_loss/ucf_2024-09-26-12-48-10/test/occlusion/ckpt_best.pth'
-            # ---------------------------------------------------------------------------------------------------------------- #
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_occ_TL/ucf_2024-09-26-08-58-01/test/occlusion/ckpt_best.pth'
-            #'/home/rz/DeepfakeBench/training/results/UCF-dfb-occ-TL/ucf_2024-09-17-07-59-22/test/occlusion/ckpt_best.pth'
-             # ---------------------------------------------------------------------------------------------------------------- #
-            print(f"using TL {model_name} model: {weights_path}")
+        # if args.tl and args.test_dataset[0] == 'occlusion':
+        if args.tl: 
+            if 'gotcha_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_gotcha_occ_TL/ucf_2024-10-16-08-10-31/test/gotcha_occlusion/ckpt_best.pth' # ucf 32 imgs in trn/test & auc test metric 
+                print(f"using TL model {args.detector}: {weights_path}")
+                #gotcha = True
+
+            # elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
+            elif 'gotcha_no_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-08-58-28/test/gotcha_no_occlusion/ckpt_best.pth'
+                #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-07-29-26/test/gotcha_no_occlusion/ckpt_best.pth' # ucf trained with 32 imgs but auc as test metric
+                print(f"using TL model {args.detector}: {weights_path}")
+                #gotcha = True
+            
             # config['pretrained'] = weights_path
             # print(config['pretrained'])
-        elif args.tl and args.test_dataset[0] == 'no_occlusion':
-            # if args.pretrained:
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_no_occ_TL/ucf_2024-10-16-12-32-33/test/no_occlusion/ckpt_best.pth' # base UCF training with 100 ex per trn/tst and focal_loss 
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL_lr_sched/ucf_2024-09-30-11-38-36/test/no_occlusion/ckpt_best.pth' # ucf w/step_lr_scheduler each 2 out of 10 training epochs
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL_focal_loss/ucf_2024-09-26-13-35-50/test/no_occlusion/ckpt_best.pth'
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_dfb_no_occ_TL/ucf_2024-09-26-09-44-17/test/no_occlusion/ckpt_best.pth'
-            print(f"using TL {model_name} model: {weights_path}")
+            # elif args.tl and args.test_dataset[0] == 'no_occlusion':
+            elif 'dfb_no_occ' in args.detector:
+                # if args.pretrained:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_no_occ_TL/ucf_2024-10-16-12-32-33/test/no_occlusion/ckpt_best.pth' # base UCF training with 100 ex per trn/tst and focal_loss 
+                print(f"using TL model {args.detector}: {weights_path}")
+            elif 'dfb_occ' in args.detector:
+                # if args.pretrained:
+                weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_dfb_occ_TL/ucf_2024-10-16-11-27-39/test/occlusion/ckpt_best.pth' # base UCF training (100 ex in trn/tst and focal_loss)
+                print(f"using TL model {args.detector}: {weights_path}")
 
-        elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
-            weights_path = '/media/data/model_exp_results/DFB/TL/TL/UCF_gotcha_occ_TL/ucf_2024-10-16-08-10-31/test/gotcha_occlusion/ckpt_best.pth' # ucf 32 imgs in trn/test & auc test metric
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_occ_TL/ucf_2024-10-15-14-13-55/test/gotcha_occlusion/ckpt_best.pth' # ucf trained with 32 imgs per user but auc as test metric
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_occ_TL/ucf_2024-10-09-12-04-14/test/gotcha_occlusion/ckpt_best.pth' # ucf trained on the whole dataset
-            #  
-            print(f"using TL {model_name} model: {weights_path}")
-            gotcha = True
+            # elif args.tl and args.test_dataset[0] == "gotcha_occlusion":
+            
 
-        elif args.tl and args.test_dataset[0] == "gotcha_no_occlusion":
-            weights_path = '/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-08-58-28/test/gotcha_no_occlusion/ckpt_best.pth'
-            #'/home/rz/DeepfakeBench/training/results/TL/UCF_gotcha_no_occ_TL/ucf_2024-10-16-07-29-26/test/gotcha_no_occlusion/ckpt_best.pth' # ucf trained with 32 imgs but auc as test metric
-            print(f"using TL {model_name} model: {weights_path}")
-            gotcha = True
+        # elif args.ft and args.test_dataset[0] == 'occlusion':
+        elif args.ft: 
+            if 'gotcha_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_occ_FT/ucf_2024-10-27-16-11-31/test/gotcha_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
+                #gotcha = True
 
-        elif args.ft and args.test_dataset[0] == 'occlusion':
-            weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_occ_FT/ucf_2024-10-17-10-02-39/test/occlusion/ckpt_best.pth'
-            print(f"using FT {model_name} model: {weights_path}")
+            # elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
+            elif 'gotcha_no_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_no_occ_FT/ucf_2024-10-27-17-45-13/test/gotcha_no_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
+                #gotcha = Ture
 
-        elif args.ft and args.test_dataset[0] == 'no_occlusion':
-            weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_no_occ_FT/ucf_2024-10-17-08-19-41/test/no_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
+             # elif args.ft and args.test_dataset[0] == 'no_occlusion':
+            elif 'dfb_no_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_no_occ_FT/ucf_2024-10-17-08-19-41/test/no_occlusion/ckpt_best.pth' 
+                print(f"using FT model {args.detector}: {weights_path}")
 
-        elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
-            weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_occ_FT/ucf_2024-10-27-16-11-31/test/gotcha_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-            gotcha = True
+            elif 'dfb_occ' in args.detector:
+                weights_path = '/media/data/model_exp_results/DFB/FT/UCF_dfb_occ_FT/ucf_2024-10-17-10-02-39/test/occlusion/ckpt_best.pth'
+                print(f"using FT model {args.detector}: {weights_path}")
 
-        elif args.ft and args.test_dataset[0] == "gotcha_no_occlusion":
-            weights_path = '/media/data/model_exp_results/DFB/FT/UCF_gotcha_no_occ_FT/ucf_2024-10-27-17-45-13/test/gotcha_no_occlusion/ckpt_best.pth' 
-            print(f"using FT {model_name} model: {weights_path}")
-            gotcha = True
+           
+            # elif args.ft and args.test_dataset[0] == "gotcha_occlusion":
 
         else:
             weights_path = './pretrained/ucf_best.pth'
@@ -372,7 +510,7 @@ def main():
             if args.test_dataset[0] == 'gotcha_occlusion' or args.test_dataset[0] == 'gotcha_no_occlusion':
                 gotcha = True
     else:
-        raise NotImplementedError('detector {} is not implemented'.format(args.detector))
+        raise NotImplementedError(f'detector {args.detector} is not implemented')
 
     print("gotcha: ", gotcha)
     # breakpoint()
@@ -403,6 +541,9 @@ def main():
     print(args.test_dataset)
     print(config['test_dataset'])
 
+    print("mode: ", config['mode'])
+    # breakpoint()
+
     # print("train_dataset: ", args.train_dataset[0])
     # gotcha = False
     if args.test_dataset[0] == 'gotcha_occlusion' or args.test_dataset[0] == 'gotcha_no_occlusion':
@@ -431,13 +572,15 @@ def main():
     
     # print("config['frame_num']['train']", config['frame_num']['train'])
     print("config['frame_num']['test']", config['frame_num']['test'])
+    # config['test_batchSize'] = 1
     print("config['test_batchSize']: ", config['test_batchSize'])
+    
     # breakpoint() 
 
     # if args.weights_path:
     #     config['weights_path'] = args.weights_path
     #     weights_path = args.weights_path
-    if weights_path:
+    if weights_path != '':
         config['weights_path'] = weights_path
         
     # print("dataset_name", dataset_name)
@@ -450,21 +593,30 @@ def main():
         print("dropout: False")
 
     # create logger for saving testing results
+    print("create the logger")
     if args.tags and args.tl:
         log_path = config['log_dir']+'/TL/'+ args.tags + '/testing/logs/test_output.log'
+        output_dir = '/home/rz/DeepfakeBench/training/results/TL/'+args.tags +'/testing/graphs/'
     elif args.tags and args.ft:
         log_path = config['log_dir']+'/FT/'+ args.tags + '/testing/logs/test_output.log'
+        output_dir = '/home/rz/DeepfakeBench/training/results/FT/'+args.tags +'/testing/graphs/'
     elif args.tags and args.gen:
         log_path = config['log_dir']+'/GEN/'+ args.tags + '/testing/logs/test_output.log'
+        output_dir = '/home/rz/DeepfakeBench/training/results/GEN/'+args.tags +'/testing/graphs/'
+    elif args.tags and args.robust:
+        log_path = config['log_dir']+'/Robustness_test/'+ args.tags + '/testing/logs/test_output.log'
+        output_dir = '/home/rz/DeepfakeBench/training/results/Robustness_test/'+ args.tags +'/testing/graphs/'
     elif args.tags:
         log_path = config['log_dir']+'/'+ args.tags + '/testing/logs/test_output.log'
+        output_dir = '/home/rz/DeepfakeBench/training/results/'+args.tags +'/testing/graphs/'
     else:
         log_path = config['log_dir'] + '/' + model_name + '/dfb_' + args.test_dataset + '/test_output.log'
 
     if not os.path.exists(log_path):
         os.makedirs(os.path.dirname(log_path), exist_ok=True) # create the directory if it does not exist
     logger = create_logger(log_path)
-
+    print("logger created!")
+    
     # init seed
     init_seed(config)
 
@@ -473,10 +625,12 @@ def main():
         cudnn.benchmark = True
 
     # prepare the testing data loader
-    test_data_loaders = prepare_testing_data(config)
+    print("prepare testing data")
+    test_data_loaders = prepare_testing_data(config = config, test_robustness= args.robust)
+    print("done")
     
     # prepare the model (detector)
-
+    print("loading the model...")
 
     model_class = DETECTOR[config['model_name']]
     model = model_class(config).to(device)
@@ -485,11 +639,11 @@ def main():
     logger.info(f"model weights path: {weights_path}")
 
     # model = ModifiedModel(model, 2).to(device)
-    
+    print("model loaded!")
     # print(model)
     # breakpoint()
     # print_model_state_dict(model)
-
+    print("start testing....")
     epoch = 0
     if weights_path:
         try:
@@ -513,13 +667,17 @@ def main():
             state_dict = ckpt  # Assume the checkpoint itself is the state_dict
 
         model_state_dict = model.state_dict()
-        
         for name, param in state_dict.items():
             if name in model_state_dict:
                 if param.shape != model_state_dict[name].shape:
                     print(f"Skipping loading parameter {name}, required shape {model_state_dict[name].shape}, loaded shape {param.shape}")
                     state_dict[name] = model_state_dict[name]
         
+        # why i've got this when testing UCF for robusteness (generalization on different kind of transformations)?
+        # start testing....
+        # Skipping loading parameter head_spe.mlp.2.weight, required shape torch.Size([2, 512]), loaded shape torch.Size([5, 512])
+        # Skipping loading parameter head_spe.mlp.2.bias, required shape torch.Size([2]), loaded shape torch.Size([5])
+
         model.load_state_dict(state_dict, strict=False) # False to allow for more flexibility when loading slightly modified architecture
 
         print('===> Load checkpoint done!')
@@ -536,7 +694,7 @@ def main():
     # exit()
 
     # start testing
-    best_metric = test_epoch(model, test_data_loaders, logger, args.tags, gotcha) # model_namedataset_name, args.tags)
+    best_metric = test_epoch(model, test_data_loaders, logger, args.tags, output_dir, gotcha) # model_namedataset_name, args.tags)
     print('===> Test Done!')
 
 if __name__ == '__main__':

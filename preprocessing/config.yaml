@@ -24,7 +24,7 @@ rearrange:
     default: 'gotcha_occlusion' #'user_faces_no_occlusion' # FaceForensics++
   dataset_root_path: # the root path to the dataset
     type: str
-    default: '/media/data/rz_dataset/gotcha/gotcha_occlusion' #'/media/data/rz_dataset/user_faces_no_occlusion/'
+    default: '/media/data/rz_dataset/gotcha/balanced_gotcha' #'/media/data/rz_dataset/user_faces_no_occlusion/'
   output_file_path: # the json path to the dataset
     type: str
     default: '../preprocessing/dataset_json/'
